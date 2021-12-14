@@ -140,6 +140,7 @@ impl Parser {
     } else if unit == "rem" {
       css_unit = CSSUnit::Rem;
     }
+    // 关于字符串转数字：https://stackoverflow.com/questions/27043268/convert-a-string-to-int
     CSSValue::Length(num.parse::<f32>().unwrap_or(0.0), css_unit)
   }
 

@@ -19,6 +19,19 @@ impl Parser {
     self.cur_str().chars().next().unwrap()
   }
 
+  /// 仅返回接下来`num`个字符而不移动位置
+  // fn next_chars(&self, num: usize) -> String {
+  //   let mut res = String::new();
+  //   let last_len = self.cur_str().len();
+  //   let chars = self.cur_str().chars();
+  //   assert!(num <= last_len);
+  //   for i in 0..num {
+  //     res.push(chars.next().unwrap_or(' '));
+  //   }
+  //   assert!(res.len() == num);
+  //   res
+  // }
+
   /// 判断当前字符子串是否以`s`开头
   fn starts_with(&self, s: &str) -> bool {
     self.cur_str().starts_with(s)
@@ -112,10 +125,35 @@ impl Parser {
     dom::element(name, attrs, children)
   }
 
+  /// 解析注释元素
+  fn parse_comment(&mut self) -> dom::Node {
+    // 注释开始
+    assert!(self.consume_char() == '<');
+    assert!(self.consume_char() == '!');
+    assert!(self.consume_char() == '-');
+    assert!(self.consume_char() == '-');
+    let mut content = String::new();
+    loop {
+      if self.starts_with("-->") {
+        break;
+      }
+      content.push(self.consume_char());
+    }
+    // 注释结束
+    assert!(self.consume_char() == '-');
+    assert!(self.consume_char() == '-');
+    assert!(self.consume_char() == '>');
+    dom::comment(content)
+  }
+
   /// 解析单个节点
   fn parse_node(&mut self) -> dom::Node {
     if self.next_char() == '<' {
-      self.parse_element()
+      if self.starts_with("<!--") { // 匹配注释开始部分
+        self.parse_comment()
+      } else {
+        self.parse_element()
+      }
     } else {
       self.parse_text()
     }

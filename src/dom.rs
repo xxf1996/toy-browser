@@ -18,7 +18,7 @@ pub struct Node {
   children: Vec<Node>,
 }
 
-/// 创建text节点
+/// 创建`text`节点
 pub fn text(data: String) -> Node {
   Node {
     node_type: NodeType::Text(data),
@@ -26,7 +26,7 @@ pub fn text(data: String) -> Node {
   }
 }
 
-/// 创建element节点
+/// 创建`element`节点
 pub fn element(name: String, attrs: AttrMap, children: Vec<Node>) -> Node {
   Node {
     node_type: NodeType::Element(
@@ -39,7 +39,7 @@ pub fn element(name: String, attrs: AttrMap, children: Vec<Node>) -> Node {
   }
 }
 
-/// 创建comment节点
+/// 创建`comment`节点
 pub fn comment(content: String) -> Node {
   Node {
     node_type: NodeType::Comment(content),

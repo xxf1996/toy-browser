@@ -40,7 +40,26 @@ fn html_test() -> Result<(), Error> {
   Ok(())
 }
 
+fn css_test() -> Result<(), Error> {
+  let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+  file_path.push("src");
+  file_path.push("source.css");
+  let file_path_url = file_path.to_str().unwrap_or("");
+  println!("{}", file_path_url);
+  let content = fs::read_to_string(file_path_url)?;
+  let stylesheet = css::parse(content);
+  println!("{:#?}", stylesheet);
+  for rule in &stylesheet.rules {
+    for selector in &rule.selectors {
+      println!("{:#?}", selector);
+      println!("{:?}", selector.get_specificity());
+    }
+  }
+  Ok(())
+}
+
 fn main() {
   // dom_test();
-  html_test();
+  // html_test();
+  css_test();
 }

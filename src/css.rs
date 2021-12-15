@@ -1,6 +1,3 @@
-use crate::dom;
-use std::collections::HashMap;
-
 struct Parser {
   /// 源码字符串
   input: String,
@@ -33,16 +30,16 @@ enum CSSValue {
 }
 
 #[derive(Debug)]
-struct CSSPropValue {
+pub struct CSSPropValue {
   prop: String,
   value: CSSValue,
 }
 
 /// 简单选择器（即不包含选择器之间的关系组合用法）
 #[derive(Debug)]
-struct CSSSimpleSelector {
+pub struct CSSSimpleSelector {
   /// ID选择器
-  id: Option<String>,
+  id: Vec<String>,
   /// class列表
   class: Vec<String>,
   /// 标签名
@@ -50,14 +47,14 @@ struct CSSSimpleSelector {
 }
 
 #[derive(Debug)]
-struct CSSRule {
-  selectors: Vec<CSSSimpleSelector>,
-  prop_value_set: Vec<CSSPropValue>
+pub struct CSSRule {
+  pub selectors: Vec<CSSSimpleSelector>,
+  pub prop_value_set: Vec<CSSPropValue>
 }
 
 #[derive(Debug)]
-struct Stylesheet {
-  rules: Vec<CSSRule>
+pub struct Stylesheet {
+  pub rules: Vec<CSSRule>
 }
 
 /// 解析`hex color`单个通道值
@@ -65,6 +62,13 @@ struct Stylesheet {
 /// 相关链接：[How would I store hexedecimal values in a variable? - The Rust Programming Language Forum](https://users.rust-lang.org/t/how-would-i-store-hexedecimal-values-in-a-variable/45545)
 fn parse_single_channel(val: &str) -> u8 {
   u8::from_str_radix(val, 16).unwrap_or(0)
+}
+
+impl CSSSimpleSelector {
+  /// 获取选择器的`specificity`（即优先级）；
+  pub fn get_specificity(&self) -> (usize, usize, usize) {
+    (self.id.len(), self.class.len(), self.tag.iter().count())
+  }
 }
 
 impl Parser {
@@ -113,10 +117,10 @@ impl Parser {
 
   /// 解析标识符：字母数字且不能以数字开头
   fn parse_identifier(&mut self) -> String {
-    if let '0'..='9' = self.next_char() {
-      panic!("标识符不能以数字开头")
+    if let '0'..='9' | '-' = self.next_char() {
+      panic!("标识符不能以数字、'-'开头")
     } else {
-      self.consume_while(|c| if let 'a'..='z' | 'A'..='Z' | '0'..='9' = c {
+      self.consume_while(|c| if let 'a'..='z' | 'A'..='Z' | '0'..='9' | '-' = c {
         true
       } else {
         false
@@ -187,4 +191,107 @@ impl Parser {
       value,
     }
   }
+
+  /// 解析一个规则内的所有键值对
+  fn parse_prop_value_set(&mut self) -> Vec<CSSPropValue> {
+    assert!(self.consume_char() == '{');
+    let mut sets = vec!();
+    loop {
+      self.consume_whitespace();
+      if self.next_char() == '}' {
+        break;
+      }
+      sets.push(self.parse_prop_value());
+    }
+    assert!(self.consume_char() == '}');
+    sets
+  }
+
+  /// 解析单个选择器
+  fn parse_simple_selector(&mut self) -> CSSSimpleSelector {
+    let mut selector = CSSSimpleSelector {
+      id: vec!(),
+      class: vec!(),
+      tag: None,
+    };
+    loop {
+      let c = self.next_char();
+      if c == '{' || c == ',' || c.is_whitespace() {
+        break;
+      }
+      match self.next_char() {
+        '#' => {
+          self.consume_char();
+          selector.id.push(self.parse_identifier());
+        },
+        '.' => {
+          self.consume_char();
+          selector.class.push(self.parse_identifier());
+        },
+        '*' => {
+          self.consume_char();
+        },
+        'a'..='z' => {
+          selector.tag = Some(self.parse_identifier());
+        },
+        _ => {
+          panic!("暂不支持的字符！");
+        }
+      }
+    }
+    selector
+  }
+
+  /// 解析一个规则对应的所有的选择器
+  fn parse_selectors(&mut self) -> Vec<CSSSimpleSelector> {
+    let mut selectors = vec!();
+    loop {
+      self.consume_whitespace();
+      let c = self.next_char();
+      if c == '{' {
+        break;
+      }
+      if c == ',' {
+        self.consume_char();
+        self.consume_whitespace();
+      }
+      selectors.push(self.parse_simple_selector());
+    }
+    assert!(self.next_char() == '{');
+    selectors
+  }
+
+  /// 解析单个`css`规则
+  fn parse_rule(&mut self) -> CSSRule {
+    let selectors = self.parse_selectors();
+    let sets = self.parse_prop_value_set();
+    CSSRule {
+      selectors,
+      prop_value_set: sets
+    }
+  }
+
+  /// 解析一个样式表
+  fn parse_stylesheet(&mut self) -> Stylesheet {
+    let mut rules = vec!();
+    loop {
+      self.consume_whitespace();
+      if self.eof() {
+        break;
+      }
+      rules.push(self.parse_rule());
+    }
+    Stylesheet {
+      rules
+    }
+  }
+}
+
+/// 解析`css`样式表结构
+pub fn parse(source: String) -> Stylesheet {
+  let mut parser = Parser {
+    pos: 0,
+    input: source,
+  };
+  parser.parse_stylesheet()
 }

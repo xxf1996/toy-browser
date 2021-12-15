@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::css::Stylesheet;
 
 pub type AttrMap = HashMap<String, String>;
 #[derive(Debug)]
@@ -7,10 +8,17 @@ pub struct ElementData {
   attrs: AttrMap,
 }
 #[derive(Debug)]
+pub struct StyleData {
+  tag_name: String,
+  attrs: AttrMap,
+  stylesheet: Stylesheet
+}
+#[derive(Debug)]
 pub enum NodeType {
   Text(String),
   Element(ElementData),
   Comment(String),
+  Style(StyleData),
 }
 #[derive(Debug)]
 pub struct Node {
@@ -43,6 +51,18 @@ pub fn element(name: String, attrs: AttrMap, children: Vec<Node>) -> Node {
 pub fn comment(content: String) -> Node {
   Node {
     node_type: NodeType::Comment(content),
+    children: vec!()
+  }
+}
+
+/// 创建`style`节点
+pub fn style(tag_name: String, attrs: AttrMap, stylesheet: Stylesheet) -> Node {
+  Node {
+    node_type: NodeType::Style(StyleData {
+      tag_name,
+      attrs,
+      stylesheet,
+    }),
     children: vec!()
   }
 }

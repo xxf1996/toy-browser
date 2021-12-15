@@ -60,6 +60,6 @@ fn css_test() -> Result<(), Error> {
 
 fn main() {
   // dom_test();
-  // html_test();
-  css_test();
+  html_test();
+  // css_test();
 }

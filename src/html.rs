@@ -1,4 +1,5 @@
 use crate::dom;
+use crate::css;
 use std::collections::HashMap;
 
 struct Parser {
@@ -111,18 +112,31 @@ impl Parser {
     attrs
   }
 
+  /// 解析`style`内部语法
+  fn parse_style(&mut self) -> css::Stylesheet {
+    let content = self.consume_while(|c| c != '<');
+    css::parse(content)
+  }
+
   /// 解析单个标签元素（**不包含**自闭合标签）
   fn parse_element(&mut self) -> dom::Node {
+    let mut res = dom::text(" ".to_string());
     assert!(self.consume_char() == '<');
     let name = self.parse_tag_name();
+    let tag_name = name.clone();
     let attrs = self.parse_attrs();
     assert!(self.consume_char() == '>');
-    let children = self.parse_nodes();
+    if name == "style" {
+      res = dom::style(name, attrs, self.parse_style());
+    } else {
+      let children = self.parse_nodes();
+      res = dom::element(name, attrs, children);
+    }
     assert!(self.consume_char() == '<');
     assert!(self.consume_char() == '/');
-    assert!(self.parse_tag_name() == name);
+    assert!(self.parse_tag_name() == tag_name);
     assert!(self.consume_char() == '>');
-    dom::element(name, attrs, children)
+    res
   }
 
   /// 解析注释元素

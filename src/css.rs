@@ -5,7 +5,7 @@ struct Parser {
   pos: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CSSColor {
   r: u8,
   g: u8,
@@ -13,37 +13,39 @@ struct CSSColor {
   a: u8,
 }
 
-#[derive(Debug)]
+/// `CSS`值的单位
+#[derive(Debug, Clone)]
 enum CSSUnit {
   Px,
   Em,
   Rem
 }
 
-/// 值类型
-#[derive(Debug)]
-enum CSSValue {
+/// 值类型，增加`Clone trait`可以使自定义值也能拷贝
+#[derive(Debug, Clone)]
+pub enum CSSValue {
   Color(CSSColor),
   Keyword(String),
   Length(f32, CSSUnit),
   Unknown(String)
 }
 
+/// `CSS`键值对
 #[derive(Debug)]
 pub struct CSSPropValue {
-  prop: String,
-  value: CSSValue,
+  pub prop: String,
+  pub value: CSSValue,
 }
 
 /// 简单选择器（即不包含选择器之间的关系组合用法）
 #[derive(Debug)]
 pub struct CSSSimpleSelector {
   /// ID选择器
-  id: Vec<String>,
+  pub id: Vec<String>,
   /// class列表
-  class: Vec<String>,
+  pub class: Vec<String>,
   /// 标签名
-  tag: Option<String>
+  pub tag: Option<String>
 }
 
 #[derive(Debug)]
@@ -57,6 +59,9 @@ pub struct Stylesheet {
   pub rules: Vec<CSSRule>
 }
 
+/// 选择器的专一性
+pub type Specificity = (usize, usize, usize);
+
 /// 解析`hex color`单个通道值
 /// 
 /// 相关链接：[How would I store hexedecimal values in a variable? - The Rust Programming Language Forum](https://users.rust-lang.org/t/how-would-i-store-hexedecimal-values-in-a-variable/45545)
@@ -66,7 +71,7 @@ fn parse_single_channel(val: &str) -> u8 {
 
 impl CSSSimpleSelector {
   /// 获取选择器的`specificity`（即优先级）；
-  pub fn get_specificity(&self) -> (usize, usize, usize) {
+  pub fn get_specificity(&self) -> Specificity {
     (self.id.len(), self.class.len(), self.tag.iter().count())
   }
 }

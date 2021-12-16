@@ -7,6 +7,7 @@ struct Parser {
   input: String,
   /// 当前位置（字符位移）
   pos: usize,
+  stylesheets: Vec<css::Stylesheet>,
 }
 
 impl Parser {
@@ -113,9 +114,10 @@ impl Parser {
   }
 
   /// 解析`style`内部语法
-  fn parse_style(&mut self) -> css::Stylesheet {
+  fn parse_style(&mut self) -> String {
     let content = self.consume_while(|c| c != '<');
-    css::parse(content)
+    self.stylesheets.push(css::parse(content.clone()));
+    content
   }
 
   /// 解析单个标签元素（**不包含**自闭合标签）
@@ -127,7 +129,8 @@ impl Parser {
     let attrs = self.parse_attrs();
     assert!(self.consume_char() == '>');
     if name == "style" {
-      res = dom::style(name, attrs, self.parse_style());
+      let source = self.parse_style();
+      res = dom::style(name, attrs, source);
     } else {
       let children = self.parse_nodes();
       res = dom::element(name, attrs, children);
@@ -188,15 +191,20 @@ impl Parser {
 }
 
 /// 解析`html`子集语法成`DOM`节点数
-pub fn parse(source: String) -> dom::Node {
+pub fn parse(source: String) -> dom::Document {
   let mut parser = Parser {
     pos: 0,
     input: source,
+    stylesheets: vec!()
   };
   let mut nodes = parser.parse_nodes();
-  if nodes.len() == 1 {
+  let root = if nodes.len() == 1 {
     nodes.swap_remove(0)
   } else {
     dom::element(String::from("html"), HashMap::new(), nodes)
+  };
+  dom::Document {
+    root,
+    stylesheets: parser.stylesheets
   }
 }

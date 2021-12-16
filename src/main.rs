@@ -1,6 +1,7 @@
 mod dom;
 mod html;
 mod css;
+mod style;
 use dom::{
   Node,
   text,
@@ -58,8 +59,22 @@ fn css_test() -> Result<(), Error> {
   Ok(())
 }
 
+fn style_tree_test() -> Result<(), Error> {
+  let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+  file_path.push("src");
+  file_path.push("source.html");
+  let file_path_url = file_path.to_str().unwrap_or("");
+  println!("{}", file_path_url);
+  let content = fs::read_to_string(file_path_url)?;
+  let document = html::parse(content);
+  let style_tree = style::get_style_tree(&document);
+  println!("{:#?}", style_tree);
+  Ok(())
+}
+
 fn main() {
   // dom_test();
-  html_test();
+  // html_test();
   // css_test();
+  style_tree_test();
 }

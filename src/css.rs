@@ -300,3 +300,13 @@ pub fn parse(source: String) -> Stylesheet {
   };
   parser.parse_stylesheet()
 }
+
+/// 解析内联样式
+pub fn parse_inline_style(style: String) -> Vec<CSSPropValue> {
+  let source = "{".to_string() + &style + "}";
+  let mut parser = Parser {
+    pos: 0,
+    input: source,
+  };
+  parser.parse_prop_value_set()
+}

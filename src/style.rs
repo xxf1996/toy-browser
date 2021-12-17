@@ -9,7 +9,8 @@ use crate::css::{
   CSSSimpleSelector,
   Specificity,
   CSSRule,
-  Stylesheet
+  Stylesheet,
+  parse_inline_style,
 };
 use std::collections::HashMap;
 
@@ -75,6 +76,14 @@ fn specified_values(element: &ElementData, stylesheets: &Vec<Stylesheet>) -> Nod
   rules.sort_by(|&(a, _), &(b, _)| a.cmp(&b)); // 对命中的规则按照优先级从低到高进行排序（这样便于优先级高的进行覆盖）
   for (_, rule) in rules {
     for prop_value in &rule.prop_value_set {
+      style.insert(prop_value.prop.clone(), prop_value.value.clone());
+    }
+  }
+  if element.attrs.contains_key("style") { // 最后解析内联样式（优先级最高，目前不考虑!important）
+    let empty_str = String::from("");
+    let style_content = element.attrs.get("style").unwrap_or(&empty_str);
+    let prop_value_set = parse_inline_style(style_content.clone());
+    for prop_value in &prop_value_set {
       style.insert(prop_value.prop.clone(), prop_value.value.clone());
     }
   }

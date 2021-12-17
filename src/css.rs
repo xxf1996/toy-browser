@@ -6,7 +6,7 @@ struct Parser {
 }
 
 #[derive(Debug, Clone)]
-struct CSSColor {
+pub struct CSSColor {
   r: u8,
   g: u8,
   b: u8,
@@ -15,7 +15,7 @@ struct CSSColor {
 
 /// `CSS`值的单位
 #[derive(Debug, Clone)]
-enum CSSUnit {
+pub enum CSSUnit {
   Px,
   Em,
   Rem
@@ -174,13 +174,25 @@ impl Parser {
 
   /// 解析单个`CSS`值
   fn parse_value(&mut self) -> CSSValue {
+    let keyword_list: Vec<&str> = vec!(
+      "block",
+      "none",
+      "inline"
+    );
     match self.next_char() {
       '0'..='9' => self.parse_value_length(),
       '#' => {
         self.consume_char();
         self.parse_hex_color()
       },
-      _ => CSSValue::Unknown(self.consume_while(|c| c != ';')),
+      _ => {
+        let val = self.consume_while(|c| c != ';');
+        if keyword_list.contains(&&*val) {
+          CSSValue::Keyword(val)
+        } else {
+          CSSValue::Unknown(val)
+        }
+      },
     }
   }
 

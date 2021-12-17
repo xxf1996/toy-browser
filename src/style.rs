@@ -19,10 +19,37 @@ type NodeStyle = HashMap<String, CSSValue>;
 /// `style-tree`节点
 #[derive(Debug)]
 pub struct StyledNode<'a> {
-  node: &'a Node,
-  children: Vec<StyledNode<'a>>,
+  pub node: &'a Node,
+  pub children: Vec<StyledNode<'a>>,
   /// 该节点命中的样式信息
-  style: NodeStyle
+  pub style: NodeStyle
+}
+
+#[derive(Debug)]
+pub enum Display {
+  Inline,
+  Block,
+  None
+}
+
+impl StyledNode<'_> {
+  /// 获取样式节点的某个样式属性值
+  pub fn get_val(&self, name: &str) -> Option<CSSValue> {
+    self.style.get(name).map(|val| val.clone())
+  }
+
+  /// 获取样式节点的`display`类型
+  pub fn get_display(&self) -> Display {
+    if let Some(CSSValue::Keyword(val)) = self.get_val("display") {
+      match &*val {
+        "block" => Display::Block,
+        "none" => Display::None,
+        _ => Display::Inline
+      }
+    } else {
+      Display::Inline
+    }
+  }
 }
 
 type MatchedRule<'a> = (Specificity, &'a CSSRule);
@@ -99,7 +126,18 @@ fn style_tree<'a>(root: &'a Node, stylesheets: &'a Vec<Stylesheet>) -> StyledNod
       NodeType::Text(_) => HashMap::new(),
       _ => HashMap::new()
     },
-    children: root.children.iter().map(|child| style_tree(child, stylesheets)).collect()
+    children: root.children
+      .iter()
+      .filter_map(|child| if let NodeType::Element(elem) = &child.node_type {
+        if elem.tag_name == "head" {
+          None // 跳过head的解析
+        } else {
+          Some(style_tree(child, stylesheets))
+        }
+      } else {
+        Some(style_tree(child, stylesheets))
+      })
+      .collect()
   }
 }
 

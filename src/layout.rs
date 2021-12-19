@@ -2,6 +2,10 @@ use crate::style::{
   StyledNode,
   Display
 };
+use crate::css::{
+  CSSValue,
+  CSSUnit
+};
 
 /// 四周边距
 #[derive(Debug)]
@@ -108,6 +112,54 @@ impl LayoutBox<'_> {
         self.children.push(LayoutBox::new(BoxType::AnonymousBlock));
       }
       self.children.last_mut().unwrap()
+    }
+  }
+
+  fn get_style_node<'a>(&'a self) -> &'a StyledNode<'a> {
+    if let BoxType::Block(style_node) | BoxType::Inline(style_node) = self.box_type {
+      &style_node
+    } else {
+      panic!("匿名结点没有样式")
+    }
+  }
+
+  fn calc_block_width(&mut self, containing_block: Box) {
+    let style_node = self.get_style_node();
+    let auto = CSSValue::Keyword(String::from("auto"));
+    let zero = CSSValue::Length(0.0, CSSUnit::Px);
+    let mut width = style_node.get_val("width").unwrap_or(auto.clone());
+    let mut margin_left = style_node.look_up("margin-left", "margin", &zero);
+    let mut margin_right = style_node.look_up("margin-right", "margin", &zero);
+    let padding_left = style_node.look_up("padding-left", "padding", &zero);
+    let padding_right = style_node.look_up("padding-right", "padding", &zero);
+    let border_left = style_node.look_up("border-left-width", "border-width", &zero);
+    let border_right = style_node.look_up("border-right-width", "border-width", &zero);
+    let total_width: f32 = [
+      &margin_left,
+      &border_left,
+      &padding_left,
+      &width,
+      &padding_right,
+      &border_right,
+      &margin_right
+    ].iter().map(|val| val.to_px()).sum();
+
+    if width != auto && total_width > containing_block.content.width {
+      if margin_left == auto {
+        margin_left = zero.clone();
+      }
+      if margin_right == auto {
+        margin_right = zero.clone();
+      }
+    }
+
+    // 包含块剩余宽度
+    let rest_wdith = containing_block.content.width - total_width;
+    
+    match (width == auto, margin_left == auto, margin_right == auto) {
+      (false, false, false) => {
+        
+      }
     }
   }
 }

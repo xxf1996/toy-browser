@@ -5,7 +5,7 @@ struct Parser {
   pos: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CSSColor {
   r: u8,
   g: u8,
@@ -14,7 +14,7 @@ pub struct CSSColor {
 }
 
 /// `CSS`值的单位
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CSSUnit {
   Px,
   Em,
@@ -22,12 +22,26 @@ pub enum CSSUnit {
 }
 
 /// 值类型，增加`Clone trait`可以使自定义值也能拷贝
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CSSValue {
   Color(CSSColor),
   Keyword(String),
   Length(f32, CSSUnit),
   Unknown(String)
+}
+
+impl CSSValue {
+  /// 将长度单位转为像素长度
+  pub fn to_px(&self) -> f32 {
+    if let CSSValue::Length(length, unit) = self {
+      match unit {
+        CSSUnit::Px => *length,
+        _ => *length * 14.0
+      }
+    } else {
+      0.0
+    }
+  }
 }
 
 /// `CSS`键值对

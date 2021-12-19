@@ -32,7 +32,7 @@ pub enum Display {
   None
 }
 
-impl StyledNode<'_> {
+impl<'a> StyledNode<'a> {
   /// 获取样式节点的某个样式属性值
   pub fn get_val(&self, name: &str) -> Option<CSSValue> {
     self.style.get(name).map(|val| val.clone())
@@ -49,6 +49,15 @@ impl StyledNode<'_> {
     } else {
       Display::Inline
     }
+  }
+
+  pub fn look_up(&self, key: &str, init_key: &str, init_val: &CSSValue) -> CSSValue {
+    self
+      .get_val(key)
+      .unwrap_or_else(|| self
+        .get_val(init_key)
+        .unwrap_or_else(|| init_val.clone())
+      )
   }
 }
 

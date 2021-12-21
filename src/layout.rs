@@ -123,6 +123,7 @@ impl LayoutBox<'_> {
     }
   }
 
+  /// 计算块级元素宽度
   fn calc_block_width(&mut self, containing_block: Box) {
     let style_node = self.get_style_node();
     let auto = CSSValue::Keyword(String::from("auto"));
@@ -142,9 +143,11 @@ impl LayoutBox<'_> {
       &padding_right,
       &border_right,
       &margin_right
-    ].iter().map(|val| val.to_px()).sum();
+    ].iter().map(|val| val.to_px()).sum(); // 总宽度（实际上就是`margin-box`宽度）
 
+    // 当前元素总宽度超过其包含块宽度时
     if width != auto && total_width > containing_block.content.width {
+      // 首先压缩外边距宽度
       if margin_left == auto {
         margin_left = zero.clone();
       }
@@ -153,13 +156,81 @@ impl LayoutBox<'_> {
       }
     }
 
-    // 包含块剩余宽度
+    //TODO: 包含块剩余宽度（关键是上面改变外边距的行为不会导致总宽度变化吗？）
     let rest_wdith = containing_block.content.width - total_width;
     
     match (width == auto, margin_left == auto, margin_right == auto) {
       (false, false, false) => {
-        
+        // 这里填充右侧外边距的目的是当溢出的时候，通过负边距来修正，而宽度剩余时只是简单地填满剩余宽度
+        margin_right = CSSValue::Length(margin_right.to_px() + rest_wdith, CSSUnit::Px);
+      },
+      (false, true, false) => {
+        margin_left = CSSValue::Length(rest_wdith, CSSUnit::Px);
+      },
+      (false, false, true) => {
+        margin_right = CSSValue::Length(rest_wdith, CSSUnit::Px);
+      },
+      (false, true, true) => {
+        margin_left = CSSValue::Length(rest_wdith / 2.0, CSSUnit::Px);
+        margin_right = CSSValue::Length(rest_wdith / 2.0, CSSUnit::Px);
+      },
+      (true, _, _) => {
+        // width的auto优先级最高
+        if margin_left == auto {
+          margin_left = zero.clone();
+        }
+        if margin_right == auto {
+          margin_right = zero.clone();
+        }
+        if rest_wdith < 0.0 {
+          width = zero.clone();
+          // 通过边距来修正
+          margin_right = CSSValue::Length(margin_right.to_px() + rest_wdith, CSSUnit::Px);
+        } else {
+          width = CSSValue::Length(rest_wdith, CSSUnit::Px);
+        }
       }
+    }
+  }
+
+  /// 获取盒模型的竖直方向距离信息
+  /// 
+  /// 因为`rust`限制了在同一作用域对同一变量同时进行可变和不可变引用
+  fn get_box_vertical_info(&self) -> (f32, f32, f32, f32, f32, f32) {
+    let style_node = self.get_style_node();
+    let zero = CSSValue::Length(0.0, CSSUnit::Px);
+    (
+      style_node.look_up("margin-top", "margin", &zero).to_px(),
+      style_node.look_up("margin-bottom", "margin", &zero).to_px(),
+      style_node.look_up("border-top-width", "border-width", &zero).to_px(),
+      style_node.look_up("border-bottom-width", "border-width", &zero).to_px(),
+      style_node.look_up("padding-top", "padding", &zero).to_px(),
+      style_node.look_up("padding-bottom", "padding", &zero).to_px(),
+    )
+  }
+
+  /// 计算块级元素位置
+  fn calc_block_position(&mut self, containing_block: Box) {
+    let vertical_info = self.get_box_vertical_info();
+    let box_model = &mut self.box_model;
+    box_model.margin.top = vertical_info.0;
+    box_model.margin.bottom = vertical_info.1;
+    box_model.border.top = vertical_info.2;
+    box_model.border.bottom = vertical_info.3;
+    box_model.padding.top = vertical_info.4;
+    box_model.padding.bottom = vertical_info.5;
+    // 计算当前盒模型的`content-box`起点位置；以其包含块`content-box`的起点进行相对位移
+    box_model.content.x = containing_block.content.x + box_model.margin.left + box_model.border.left + box_model.padding.left;
+    box_model.content.y = containing_block.content.y + box_model.margin.top + box_model.border.top + box_model.padding.top;
+  }
+
+  fn calc_block_children(&mut self) {
+    let box_model = &mut self.box_model;
+    for child in &mut self.children {
+      // TODO: 自顶向下计算元素宽度
+      // child.calc_layout
+      // TODO: 自底向上计算元素高度
+      // box_model.content.height = box_model.content.height + child.box_model.margin.
     }
   }
 }

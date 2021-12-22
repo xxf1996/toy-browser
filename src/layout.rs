@@ -8,8 +8,8 @@ use crate::css::{
 };
 
 /// 四周边距
-#[derive(Debug)]
-struct EdgeSizes {
+#[derive(Debug, Copy, Clone)]
+pub struct EdgeSizes {
   top: f32,
   right: f32,
   bottom: f32,
@@ -17,26 +17,26 @@ struct EdgeSizes {
 }
 
 /// 矩形区域
-#[derive(Debug)]
-struct RectArea {
+#[derive(Debug, Copy, Clone)]
+pub struct RectArea {
   /// 起点x坐标
-  x: f32,
+  pub x: f32,
   /// 起点y坐标
-  y: f32,
+  pub y: f32,
   /// 宽度
-  width: f32,
+  pub width: f32,
   /// 高度
-  height: f32
+  pub height: f32
 }
 
 /// 盒模型
-#[derive(Debug)]
-struct Box {
+#[derive(Debug, Copy, Clone)]
+pub struct Box {
   /// `content-box`
-  content: RectArea,
-  padding: EdgeSizes,
-  border: EdgeSizes,
-  margin: EdgeSizes
+  pub content: RectArea,
+  pub padding: EdgeSizes,
+  pub border: EdgeSizes,
+  pub margin: EdgeSizes
 }
 
 /// 盒模型类型
@@ -68,6 +68,7 @@ impl EdgeSizes {
 }
 
 impl RectArea {
+  /// 默认值
   fn default() -> RectArea {
     RectArea {
       x: 0.,
@@ -76,16 +77,42 @@ impl RectArea {
       height: 0.
     }
   }
+
+  /// 在矩形区域外扩展四周`边距`，形成一个**新的矩形区域**
+  fn expanded_by(self, edge: EdgeSizes) -> RectArea {
+    RectArea {
+      x: self.x - edge.left,
+      y: self.y - edge.top,
+      width: self.width + edge.left + edge.right,
+      height: self.height + edge.top + edge.bottom,
+    }
+  }
 }
 
 impl Box {
-  fn default() -> Box {
+  /// 默认值
+  pub fn default() -> Box {
     Box {
       content: RectArea::default(),
       padding: EdgeSizes::default(),
       border: EdgeSizes::default(),
       margin: EdgeSizes::default()
     }
+  }
+
+  /// `padding-box`区域
+  fn padding_box(self) -> RectArea {
+    self.content.expanded_by(self.padding)
+  }
+
+  /// `border-box`区域
+  fn border_box(self) -> RectArea {
+    self.padding_box().expanded_by(self.border)
+  }
+
+  /// `margin-box`区域
+  fn margin_box(self) -> RectArea {
+    self.border_box().expanded_by(self.margin)
   }
 }
 
@@ -115,6 +142,7 @@ impl LayoutBox<'_> {
     }
   }
 
+  /// 获取样式节点
   fn get_style_node<'a>(&'a self) -> &'a StyledNode<'a> {
     if let BoxType::Block(style_node) | BoxType::Inline(style_node) = self.box_type {
       &style_node
@@ -158,6 +186,8 @@ impl LayoutBox<'_> {
 
     //TODO: 包含块剩余宽度（关键是上面改变外边距的行为不会导致总宽度变化吗？）
     let rest_wdith = containing_block.content.width - total_width;
+
+    println!("width: {}, rest: {}", total_width, rest_wdith);
     
     match (width == auto, margin_left == auto, margin_right == auto) {
       (false, false, false) => {
@@ -224,19 +254,49 @@ impl LayoutBox<'_> {
     box_model.content.y = containing_block.content.y + box_model.margin.top + box_model.border.top + box_model.padding.top;
   }
 
+  /// 计算块级元素高度
+  fn calc_block_height(&mut self) {
+    // TODO: 块级元素排列算法
+    if let Some(CSSValue::Length(height, CSSUnit::Px)) = self.get_style_node().get_val("height") {
+      self.box_model.content.height = height;
+    }
+  }
+
+  /// 计算块级元素子元素布局
   fn calc_block_children(&mut self) {
     let box_model = &mut self.box_model;
     for child in &mut self.children {
-      // TODO: 自顶向下计算元素宽度
-      // child.calc_layout
-      // TODO: 自底向上计算元素高度
-      // box_model.content.height = box_model.content.height + child.box_model.margin.
+      // 自顶向下计算元素布局
+      child.calc_layout(*box_model);
+      // 自底向上计算元素高度
+      box_model.content.height = box_model.content.height + child.box_model.margin_box().height;
+    }
+  }
+
+  fn calc_block_layout(&mut self, containing_block: Box) {
+    // 自顶向下计算宽度和起点
+    self.calc_block_width(containing_block);
+    self.calc_block_position(containing_block);
+    self.calc_block_children();
+    // 自底向上计算高度
+    self.calc_block_height();
+  }
+
+  fn calc_layout(&mut self, containing_block: Box) {
+    match self.box_type {
+      BoxType::Block(_) => self.calc_block_layout(containing_block),
+      BoxType::Inline(_) => {
+        // TODO: 行内元素布局计算
+      },
+      BoxType::AnonymousBlock => {
+        // TODO: 匿名容器布局计算
+      }
     }
   }
 }
 
-/// 生成布局树
-pub fn get_layout_tree<'a>(style_tree: &'a StyledNode<'a>) -> LayoutBox<'a> {
+/// 生成布局树结构
+fn get_layout_tree_struct<'a>(style_tree: &'a StyledNode<'a>) -> LayoutBox<'a> {
   let mut root = LayoutBox::new(
     match style_tree.get_display() {
       Display::Block => BoxType::Block(style_tree),
@@ -247,12 +307,20 @@ pub fn get_layout_tree<'a>(style_tree: &'a StyledNode<'a>) -> LayoutBox<'a> {
 
   for child in &style_tree.children {
     match child.get_display() {
-      Display::Block => root.children.push(get_layout_tree(child)),
-      Display::Inline => root.get_inline_container().children.push(get_layout_tree(child)),
+      Display::Block => root.children.push(get_layout_tree_struct(child)),
+      Display::Inline => root.get_inline_container().children.push(get_layout_tree_struct(child)),
       Display::None => {} // 跳过display为none的节点
     }
   }
 
   root
+}
+
+/// 从样式树生成布局树
+pub fn get_layout_tree<'a>(style_tree: &'a StyledNode<'a>, mut init_box: Box) -> LayoutBox<'a> {
+  init_box.content.height = 0.0;
+  let mut root_box = get_layout_tree_struct(style_tree);
+  root_box.calc_layout(init_box);
+  root_box
 }
 

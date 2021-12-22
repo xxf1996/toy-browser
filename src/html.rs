@@ -1,6 +1,9 @@
 use crate::dom;
 use crate::css;
 use std::collections::HashMap;
+use std::fs;
+use std::io::Error;
+use std::path::PathBuf;
 
 struct Parser {
   /// 源码字符串
@@ -190,6 +193,17 @@ impl Parser {
   }
 }
 
+/// 获取浏览器内置的样式
+fn get_default_stylesheet() -> Result<css::Stylesheet, Error> {
+  let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+  file_path.push("src");
+  file_path.push("default.css");
+  let file_path_url = file_path.to_str().unwrap_or("");
+  let content = fs::read_to_string(file_path_url)?;
+  let stylesheet = css::parse(content);
+  Ok(stylesheet)
+}
+
 /// 解析`html`子集语法成`DOM`节点数
 pub fn parse(source: String) -> dom::Document {
   let mut parser = Parser {
@@ -203,6 +217,8 @@ pub fn parse(source: String) -> dom::Document {
   } else {
     dom::element(String::from("html"), HashMap::new(), nodes)
   };
+  let default_stylesheet = get_default_stylesheet().unwrap_or(css::parse(String::from("")));
+  parser.stylesheets.insert(0, default_stylesheet); // 保证默认样式是优先级最低的
   dom::Document {
     root,
     stylesheets: parser.stylesheets

@@ -1,0 +1,9 @@
+html, body, p, div {
+  display: block;
+}
+body {
+  font-size: 14px;
+}
+p {
+  line-height: 1.25em;
+}

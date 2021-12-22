@@ -82,7 +82,10 @@ fn layout_tree_test() -> Result<(), Error> {
   let content = fs::read_to_string(file_path_url)?;
   let document = html::parse(content);
   let style_tree = style::get_style_tree(&document);
-  let layout_tree = layout::get_layout_tree(&style_tree);
+  // 模拟视窗
+  let mut viewport = layout::Box::default();
+  viewport.content.width = 1280.0;
+  let layout_tree = layout::get_layout_tree(&style_tree, viewport);
   println!("{:#?}", layout_tree);
   Ok(())
 }

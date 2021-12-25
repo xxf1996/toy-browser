@@ -3,6 +3,7 @@ mod html;
 mod css;
 mod style;
 mod layout;
+mod raster;
 use dom::{
   Node,
   text,
@@ -34,6 +35,7 @@ fn html_test() -> Result<(), Error> {
   // CARGO_MANIFEST_DIR是内置的环境：项目根目录路径
   let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   file_path.push("src");
+  file_path.push("demo");
   file_path.push("source.html");
   let file_path_url = file_path.to_str().unwrap_or("");
   println!("{}", file_path_url);
@@ -45,6 +47,7 @@ fn html_test() -> Result<(), Error> {
 fn css_test() -> Result<(), Error> {
   let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   file_path.push("src");
+  file_path.push("demo");
   file_path.push("source.css");
   let file_path_url = file_path.to_str().unwrap_or("");
   println!("{}", file_path_url);
@@ -63,6 +66,7 @@ fn css_test() -> Result<(), Error> {
 fn style_tree_test() -> Result<(), Error> {
   let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   file_path.push("src");
+  file_path.push("demo");
   file_path.push("source.html");
   let file_path_url = file_path.to_str().unwrap_or("");
   println!("{}", file_path_url);
@@ -76,6 +80,7 @@ fn style_tree_test() -> Result<(), Error> {
 fn layout_tree_test() -> Result<(), Error> {
   let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   file_path.push("src");
+  file_path.push("demo");
   file_path.push("source.html");
   let file_path_url = file_path.to_str().unwrap_or("");
   println!("{}", file_path_url);
@@ -90,10 +95,32 @@ fn layout_tree_test() -> Result<(), Error> {
   Ok(())
 }
 
+fn painting_test() -> Result<(), Error> {
+  let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+  file_path.push("src");
+  file_path.push("demo");
+  file_path.push("painting.html");
+  let file_path_url = file_path.to_str().unwrap_or("");
+  println!("{}", file_path_url);
+  let content = fs::read_to_string(file_path_url)?;
+  let document = html::parse(content);
+  let style_tree = style::get_style_tree(&document);
+  // 模拟视窗
+  let mut viewport = layout::Box::default();
+  viewport.content.width = 1280.0;
+  let layout_tree = layout::get_layout_tree(&style_tree, viewport);
+  let painting_res = raster::raster(&layout_tree);
+  let mut save_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+  save_path.push("result.png");
+  painting_res.save(save_path.to_str().unwrap_or(""));
+  Ok(())
+}
+
 fn main() {
   // dom_test();
   // html_test();
   // css_test();
   // style_tree_test();
-  layout_tree_test();
+  // layout_tree_test();
+  painting_test();
 }

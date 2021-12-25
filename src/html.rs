@@ -197,6 +197,7 @@ impl Parser {
 fn get_default_stylesheet() -> Result<css::Stylesheet, Error> {
   let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   file_path.push("src");
+  file_path.push("config");
   file_path.push("default.css");
   let file_path_url = file_path.to_str().unwrap_or("");
   let content = fs::read_to_string(file_path_url)?;

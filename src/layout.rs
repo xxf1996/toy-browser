@@ -10,10 +10,10 @@ use crate::css::{
 /// 四周边距
 #[derive(Debug, Copy, Clone)]
 pub struct EdgeSizes {
-  top: f32,
-  right: f32,
-  bottom: f32,
-  left: f32
+  pub top: f32,
+  pub right: f32,
+  pub bottom: f32,
+  pub left: f32
 }
 
 /// 矩形区域
@@ -41,7 +41,7 @@ pub struct Box {
 
 /// 盒模型类型
 #[derive(Debug)]
-enum BoxType<'a> {
+pub enum BoxType<'a> {
   Block(&'a StyledNode<'a>),
   Inline(&'a StyledNode<'a>),
   /// 匿名`block box`，用于存放多个`inline box`
@@ -51,9 +51,9 @@ enum BoxType<'a> {
 /// 布局树（`layout tree`）节点
 #[derive(Debug)]
 pub struct LayoutBox<'a> {
-  box_model: Box,
-  box_type: BoxType<'a>,
-  children: Vec<LayoutBox<'a>>
+  pub box_model: Box,
+  pub box_type: BoxType<'a>,
+  pub children: Vec<LayoutBox<'a>>
 }
 
 impl EdgeSizes {
@@ -101,17 +101,17 @@ impl Box {
   }
 
   /// `padding-box`区域
-  fn padding_box(self) -> RectArea {
+  pub fn padding_box(self) -> RectArea {
     self.content.expanded_by(self.padding)
   }
 
   /// `border-box`区域
-  fn border_box(self) -> RectArea {
+  pub fn border_box(self) -> RectArea {
     self.padding_box().expanded_by(self.border)
   }
 
   /// `margin-box`区域
-  fn margin_box(self) -> RectArea {
+  pub fn margin_box(self) -> RectArea {
     self.border_box().expanded_by(self.margin)
   }
 }
@@ -218,9 +218,19 @@ impl LayoutBox<'_> {
           margin_right = CSSValue::Length(margin_right.to_px() + rest_wdith, CSSUnit::Px);
         } else {
           width = CSSValue::Length(rest_wdith, CSSUnit::Px);
+          println!("此时的width: {}", width.to_px());
         }
       }
     }
+
+    // 更新水平方向的宽度信息
+    self.box_model.content.width = width.to_px();
+    self.box_model.padding.left = padding_left.to_px();
+    self.box_model.padding.right = padding_right.to_px();
+    self.box_model.border.left = border_left.to_px();
+    self.box_model.border.right = border_right.to_px();
+    self.box_model.margin.left = margin_left.to_px();
+    self.box_model.margin.right = margin_right.to_px();
   }
 
   /// 获取盒模型的竖直方向距离信息

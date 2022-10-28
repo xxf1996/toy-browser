@@ -134,7 +134,7 @@ impl LayoutBox<'_> {
     } else {
       // 居然还以用..来代替剩余结构
       if let Some(&LayoutBox { box_type: BoxType::AnonymousBlock, .. }) = self.children.last() {
-        
+
       } else {
         self.children.push(LayoutBox::new(BoxType::AnonymousBlock));
       }
@@ -261,7 +261,8 @@ impl LayoutBox<'_> {
     box_model.padding.bottom = vertical_info.5;
     // 计算当前盒模型的`content-box`起点位置；以其包含块`content-box`的起点进行相对位移
     box_model.content.x = containing_block.content.x + box_model.margin.left + box_model.border.left + box_model.padding.left;
-    box_model.content.y = containing_block.content.y + box_model.margin.top + box_model.border.top + box_model.padding.top;
+    // 当前包含块的高度就是之前的子级元素撑开的高度，需要累加到当前元素的偏移中！
+    box_model.content.y = containing_block.content.y + containing_block.content.height + box_model.margin.top + box_model.border.top + box_model.padding.top;
   }
 
   /// 计算块级元素高度

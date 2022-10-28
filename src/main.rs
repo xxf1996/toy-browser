@@ -99,7 +99,7 @@ fn painting_test() -> Result<(), Error> {
   let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   file_path.push("src");
   file_path.push("demo");
-  file_path.push("painting.html");
+  file_path.push("block-test.html");
   let file_path_url = file_path.to_str().unwrap_or("");
   println!("{}", file_path_url);
   let content = fs::read_to_string(file_path_url)?;

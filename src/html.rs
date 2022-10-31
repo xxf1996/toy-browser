@@ -97,7 +97,13 @@ impl Parser {
   /// 解析属性key
   fn parse_attr(&mut self) -> (String, String) {
     let name = self.parse_tag_name();
-    assert!(self.consume_char() == '=');
+    let next_char = self.consume_char();
+    // 空属性
+    if name.is_empty() {
+      return (String::from(""), String::from(""));
+    }
+    // TODO: 这里实际上很多边界情况没有处理
+    assert!(next_char == '=', "name: {}, next char: {}", name, next_char);
     let val = self.parse_attr_val();
     (name, val)
   }

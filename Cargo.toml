@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 image = "0.23.14"
 boa_engine = "0.16.0"
+fontdue = "0.7.2"
 
 [workspace]
 resolver = "2"
@@ -15,3 +16,8 @@ resolver = "2"
 [[example]]
 name = "boa-run"
 path = "example/boa-run/test.rs"
+
+[[example]]
+name = "layout-test"
+path = "example/font/layout-test.rs"
+

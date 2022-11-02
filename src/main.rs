@@ -4,6 +4,7 @@ mod css;
 mod style;
 mod layout;
 mod raster;
+mod font;
 use dom::{
   Node,
   text,

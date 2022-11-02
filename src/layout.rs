@@ -1,3 +1,5 @@
+use crate::dom::NodeType;
+use crate::font::TextLayout;
 use crate::style::{
   StyledNode,
   Display
@@ -6,6 +8,11 @@ use crate::css::{
   CSSValue,
   CSSUnit
 };
+
+/// [Global variables? Do they exist? : rust](https://www.reddit.com/r/rust/comments/2v2h8l/global_variables_do_they_exist/)
+///
+/// 在rust里，限定了全局变量的声明方式，过于动态的全局变量是unsafe的
+static mut TEXT_LAYOUTS: Vec<TextLayout> = vec![];
 
 /// 四周边距
 #[derive(Debug, Copy, Clone)]
@@ -45,7 +52,9 @@ pub enum BoxType<'a> {
   Block(&'a StyledNode<'a>),
   Inline(&'a StyledNode<'a>),
   /// 匿名`block box`，用于存放多个`inline box`
-  AnonymousBlock
+  AnonymousBlock,
+  /// 匿名`inline box`，一般是由块级box直接包含的文字产生
+  AnonymousInline(&'a String)
 }
 
 /// 布局树（`layout tree`）节点
@@ -125,20 +134,21 @@ impl LayoutBox<'_> {
     }
   }
 
-  /// 获取`inline`节点的容器节点
+  /// 获取`inline`节点的容器节点（这里的self就是`inline`节点的父节点）
   /// 
   /// 主要是判断在`block`节点内混用`inline`和`block`节点时，需要对连续的`inline`节点人为增加匿名容器
   fn get_inline_container(&mut self) -> &mut Self {
+    // 本身如果是匿名块级box或内联box则无需新建容器
     if let BoxType::Inline(_) | BoxType::AnonymousBlock = self.box_type {
       self
     } else {
-      // 居然还以用..来代替剩余结构
+      // TODO: 上一个元素如果正好是匿名块级box则无需再新建，直接共用？标准里好像没见到……
       if let Some(&LayoutBox { box_type: BoxType::AnonymousBlock, .. }) = self.children.last() {
-
+        //
       } else {
         self.children.push(LayoutBox::new(BoxType::AnonymousBlock));
       }
-      self.children.last_mut().unwrap()
+      self.children.last_mut().unwrap() // 返回匿名块级box
     }
   }
 
@@ -293,7 +303,12 @@ impl LayoutBox<'_> {
     self.calc_block_height();
   }
 
+  fn calc_inline_layout(&mut self, containing_block: Box) {
+    // 头大
+  }
+
   fn calc_layout(&mut self, containing_block: Box) {
+    // 这里的包含块有可能是匿名块级box，实际上计算百分比属性时不应该用匿名块级box作为包含块
     match self.box_type {
       BoxType::Block(_) => self.calc_block_layout(containing_block),
       BoxType::Inline(_) => {
@@ -301,17 +316,27 @@ impl LayoutBox<'_> {
       },
       BoxType::AnonymousBlock => {
         // TODO: 匿名容器布局计算
+        self.calc_block_layout(containing_block)
+      },
+      BoxType::AnonymousInline(_) => {
+        todo!()
       }
     }
   }
 }
 
-/// 生成布局树结构
+/// 生成布局树结构（实际上是构建box tree）
 fn get_layout_tree_struct<'a>(style_tree: &'a StyledNode<'a>) -> LayoutBox<'a> {
   let mut root = LayoutBox::new(
     match style_tree.get_display() {
       Display::Block => BoxType::Block(style_tree),
-      Display::Inline => BoxType::Inline(style_tree),
+      Display::Inline => {
+        if let NodeType::Text(content) = &style_tree.node.node_type {
+          BoxType::AnonymousInline(&content)
+        } else {
+          BoxType::Inline(style_tree)
+        }
+      },
       Display::None => panic!("根节点不能设置`display: none`")
     }
   );
@@ -327,8 +352,23 @@ fn get_layout_tree_struct<'a>(style_tree: &'a StyledNode<'a>) -> LayoutBox<'a> {
   root
 }
 
+fn get_text_layout<'a>() -> &'a mut TextLayout {
+  unsafe {
+    if TEXT_LAYOUTS.len() == 0 {
+      panic!("文字布局还未加载成功！")
+    }
+    TEXT_LAYOUTS.get_mut(0).unwrap()
+  }
+}
+
 /// 从样式树生成布局树
 pub fn get_layout_tree<'a>(style_tree: &'a StyledNode<'a>, mut init_box: Box) -> LayoutBox<'a> {
+  unsafe {
+    // 初始化文字布局模块
+    if TEXT_LAYOUTS.len() == 0 {
+      TEXT_LAYOUTS.push(TextLayout::default())
+    }
+  }
   init_box.content.height = 0.0;
   let mut root_box = get_layout_tree_struct(style_tree);
   root_box.calc_layout(init_box);

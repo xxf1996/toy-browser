@@ -1,3 +1,5 @@
+use fontdue::layout::TextStyle;
+
 use crate::dom::NodeType;
 use crate::font::TextLayout;
 use crate::style::{
@@ -54,7 +56,9 @@ pub enum BoxType<'a> {
   /// 匿名`block box`，用于存放多个`inline box`
   AnonymousBlock,
   /// 匿名`inline box`，一般是由块级box直接包含的文字产生
-  AnonymousInline(&'a String)
+  AnonymousInline(&'a String),
+  /// line box
+  Line
 }
 
 /// 布局树（`layout tree`）节点
@@ -143,6 +147,7 @@ impl LayoutBox<'_> {
       self
     } else {
       // TODO: 上一个元素如果正好是匿名块级box则无需再新建，直接共用？标准里好像没见到……
+      // 按理说，如果自身是block box，且子级正好是非匿名的inline box还有必要借用匿名block box吗？
       if let Some(&LayoutBox { box_type: BoxType::AnonymousBlock, .. }) = self.children.last() {
         //
       } else {
@@ -286,6 +291,7 @@ impl LayoutBox<'_> {
   /// 计算块级元素子元素布局
   fn calc_block_children(&mut self) {
     let box_model = &mut self.box_model;
+    // 考虑到line box是动态产生的，这里应该用栈结构进行遍历
     for child in &mut self.children {
       // 自顶向下计算元素布局
       child.calc_layout(*box_model);
@@ -303,14 +309,38 @@ impl LayoutBox<'_> {
     self.calc_block_height();
   }
 
+  fn calc_inline_children(&mut self, containing_block: Box) {
+    let box_model = &mut self.box_model;
+    for child in &mut self.children {
+      child.calc_layout(containing_block)
+    }
+  }
+
+  fn calc_inline_width(&mut self, containing_block: Box) {
+    // TODO: 在哪里给line box重新分配现有的inline box？
+    self.calc_inline_children(containing_block);
+  }
+
   fn calc_inline_layout(&mut self, containing_block: Box) {
     // 头大
+  }
+
+  fn calc_text_layout(&mut self, containing_block: Box, text: &String) {
+    let text_layout = get_text_layout();
+    text_layout.layout.clear();
+    text_layout.layout.append(&text_layout.fonts, &TextStyle::new(text.as_str(), 14.0, 0));
+    let last_text = text_layout.layout.glyphs().last().unwrap();
+    self.box_model.content.width = last_text.x + (last_text.width as f32);
+    self.box_model.content.height = text_layout.layout.height();
+    // 文字的起始位置取决于最近的一个line box；不过box没有布局节点信息……
   }
 
   fn calc_layout(&mut self, containing_block: Box) {
     // 这里的包含块有可能是匿名块级box，实际上计算百分比属性时不应该用匿名块级box作为包含块
     match self.box_type {
       BoxType::Block(_) => self.calc_block_layout(containing_block),
+      // TODO: line box怎么确定？line box只由IFC产生，那么应该都是在inline box内部？
+      // 根据测试(https://codepen.io/xxf1996/pen/oNyLWLd)，同一个line box可能包含多个不同inline box的内容；因此line box确实只能存在block box内？
       BoxType::Inline(_) => {
         // TODO: 行内元素布局计算
       },
@@ -318,7 +348,10 @@ impl LayoutBox<'_> {
         // TODO: 匿名容器布局计算
         self.calc_block_layout(containing_block)
       },
-      BoxType::AnonymousInline(_) => {
+      BoxType::AnonymousInline(text) => {
+        self.calc_text_layout(containing_block, text)
+      },
+      BoxType::Line => {
         todo!()
       }
     }

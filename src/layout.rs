@@ -129,7 +129,7 @@ impl Box {
   }
 }
 
-impl LayoutBox<'_> {
+impl<'a> LayoutBox<'a> {
   fn new(box_type: BoxType) -> LayoutBox {
     LayoutBox {
       box_model: Box::default(),
@@ -158,7 +158,7 @@ impl LayoutBox<'_> {
   }
 
   /// 获取样式节点
-  fn get_style_node<'a>(&'a self) -> &'a StyledNode<'a> {
+  fn get_style_node<'b>(&'b self) -> &'b StyledNode<'b> {
     if let BoxType::Block(style_node) | BoxType::Inline(style_node) = self.box_type {
       &style_node
     } else {
@@ -290,14 +290,114 @@ impl LayoutBox<'_> {
 
   /// 计算块级元素子元素布局
   fn calc_block_children(&mut self) {
+    self.calc_block_line_box(); // 先计算line box，因为line box本质上改变了box tree的结构
     let box_model = &mut self.box_model;
     // 考虑到line box是动态产生的，这里应该用栈结构进行遍历
     for child in &mut self.children {
       // 自顶向下计算元素布局
       child.calc_layout(*box_model);
+      // child.get_inline_container();
       // 自底向上计算元素高度
       box_model.content.height = box_model.content.height + child.box_model.margin_box().height;
     }
+  }
+
+  /// 将inline box的子级全部平展到一维（应该是深度优先遍历？）
+  fn flat_inline_box<'b>(&mut self) -> Vec<LayoutBox<'a>> {
+    // 这里'b的生命周期应该在'a之内？
+    let mut all_children: Vec<LayoutBox<'_>> = vec![];
+    while self.children.len() > 0 {
+      let mut child = self.children.remove(0);
+      match child.box_type {
+        BoxType::AnonymousInline(_) => {
+          all_children.push(child)
+        },
+        BoxType::Inline(_) => {
+          let children = child.flat_inline_box();
+          all_children.extend(children)
+        },
+        _ => {}
+      }
+    }
+    all_children
+  }
+
+  /// 获取当前`line box`的剩余宽度
+  fn get_line_rest_width(&self) -> f32 {
+    if let BoxType::Line = self.box_type {
+      self.box_model.content.width - self.children.iter().map(|child| child.box_model.content.width).sum::<f32>()
+    } else {
+      0.0
+    }
+  }
+
+  /// 计算block box内部的line box结构
+  ///
+  /// 这里顺便计算了line box内部文本（匿名inline box）的宽度，高度和起始位置
+  fn calc_block_line_box(&mut self) {
+    if self.children.len() == 0 {
+      return;
+    }
+    let mut all_children: Vec<LayoutBox<'_>> = vec![];
+    while self.children.len() > 0 {
+      let mut cur_child = self.children.remove(0);
+      match cur_child.box_type {
+        BoxType::Block(_) | BoxType::AnonymousBlock | BoxType::AnonymousInline(_) => {
+          all_children.push(cur_child)
+        },
+        BoxType::Inline(_) => {
+          // 这里相当于把inline box及其子级全部提到当前container box中了，平展后方便进行line box的计算
+          all_children.extend(cur_child.flat_inline_box())
+        },
+        _ => {} // 初始box tree不会产生line box，所以不需要考虑
+      }
+    }
+    let mut line_and_children: Vec<LayoutBox<'_>> = vec![];
+    while all_children.len() > 0 {
+      let mut cur_child = all_children.remove(0);
+      match cur_child.box_type {
+        BoxType::Block(_) | BoxType::AnonymousBlock => {
+          line_and_children.push(cur_child)
+        },
+        BoxType::AnonymousInline(content) => {
+          let (w, h) = cur_child.calc_text_layout(content);
+          cur_child.box_model.content.height = h; // 设置行高
+          let mut last_line: Option<&mut LayoutBox> = None;
+
+          for child in line_and_children.iter_mut() {
+            if let BoxType::Line = child.box_type {
+              last_line = Some(child);
+            }
+          }
+
+          if let None = last_line {
+            let mut new_line = LayoutBox::new(BoxType::Line);
+            new_line.box_model.content.width = self.box_model.content.width;
+            line_and_children.push(new_line);
+            last_line = line_and_children.last_mut();
+          }
+
+          let mut last_line_box = last_line.unwrap();
+          let rest_width = last_line_box.get_line_rest_width();
+
+          if rest_width >= w {
+            cur_child.box_model.content.x = last_line_box.box_model.content.width - rest_width; // 水平排列
+            last_line_box.children.push(cur_child);
+          } else { // line box剩余宽度不够时则新加一行（目前不考虑单行文本换行的情况）
+            let mut new_line = LayoutBox::new(BoxType::Line);
+            new_line.box_model.content.width = self.box_model.content.width;
+            line_and_children.push(new_line);
+            last_line = line_and_children.last_mut();
+            last_line_box = last_line.unwrap();
+            cur_child.box_model.content.x = 0.0;
+            last_line_box.children.push(cur_child);
+          }
+        },
+        _ => {} // 这里理论上不存在不包含文字的line box了
+      }
+    }
+
+    self.children = line_and_children;
   }
 
   fn calc_block_layout(&mut self, containing_block: Box) {
@@ -325,35 +425,39 @@ impl LayoutBox<'_> {
     // 头大
   }
 
-  fn calc_text_layout(&mut self, containing_block: Box, text: &String) {
+  /// 计算单行文本的宽高信息
+  fn calc_text_layout(&self, text: &String) -> (f32, f32) {
     let text_layout = get_text_layout();
     text_layout.layout.clear();
     text_layout.layout.append(&text_layout.fonts, &TextStyle::new(text.as_str(), 14.0, 0));
     let last_text = text_layout.layout.glyphs().last().unwrap();
-    self.box_model.content.width = last_text.x + (last_text.width as f32);
-    self.box_model.content.height = text_layout.layout.height();
     // 文字的起始位置取决于最近的一个line box；不过box没有布局节点信息……
+    (last_text.x + (last_text.width as f32), text_layout.layout.height())
+  }
+
+  /// 计算line box的布局信息
+  fn calc_line_box_layout(&mut self, containing_block: Box) {
+    let max_h = self.children.iter().map(|child| child.box_model.content.height).max_by(|a, b| a.total_cmp(b)).unwrap();
+    self.box_model.content.y = containing_block.content.height; // 竖直位置取决于当前包含块高度
+    self.box_model.content.height = max_h; // 高度取决于当前包含的最高的inline box
   }
 
   fn calc_layout(&mut self, containing_block: Box) {
     // 这里的包含块有可能是匿名块级box，实际上计算百分比属性时不应该用匿名块级box作为包含块
+
+    // 经过line box的重新组织后，这里应该不再会出现inline/匿名inline的情况了
     match self.box_type {
       BoxType::Block(_) => self.calc_block_layout(containing_block),
       // TODO: line box怎么确定？line box只由IFC产生，那么应该都是在inline box内部？
       // 根据测试(https://codepen.io/xxf1996/pen/oNyLWLd)，同一个line box可能包含多个不同inline box的内容；因此line box确实只能存在block box内？
-      BoxType::Inline(_) => {
-        // TODO: 行内元素布局计算
-      },
       BoxType::AnonymousBlock => {
         // TODO: 匿名容器布局计算
         self.calc_block_layout(containing_block)
       },
-      BoxType::AnonymousInline(text) => {
-        self.calc_text_layout(containing_block, text)
-      },
       BoxType::Line => {
-        todo!()
-      }
+        self.calc_line_box_layout(containing_block)
+      },
+      _ => {}
     }
   }
 }

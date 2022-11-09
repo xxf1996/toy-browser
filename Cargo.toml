@@ -21,3 +21,7 @@ path = "example/boa-run/test.rs"
 name = "layout-test"
 path = "example/font/layout-test.rs"
 
+[[example]]
+name = "render-test"
+path = "example/font/render-test.rs"
+

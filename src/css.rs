@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 struct Parser {
   /// 源码字符串
   input: String,
@@ -40,6 +42,21 @@ impl CSSValue {
       }
     } else {
       0.0
+    }
+  }
+}
+
+// 可以当结构体用数字索引形式进行访问，就跟数组一样
+impl Index<usize> for CSSColor {
+  type Output = u8;
+
+  fn index(&self, index: usize) -> &Self::Output {
+    match index {
+      0 => &self.r,
+      1 => &self.g,
+      2 => &self.b,
+      3 => &self.a,
+      _ => &0
     }
   }
 }

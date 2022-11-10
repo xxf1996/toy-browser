@@ -1,8 +1,11 @@
 * {
-  border-color: #000000;
+  border-color: #630090;
 }
 html, body, p, div {
   display: block;
+}
+span {
+  display: inline;
 }
 body {
   font-size: 14px;

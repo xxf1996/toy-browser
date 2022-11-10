@@ -1,4 +1,4 @@
-use fontdue::layout::TextStyle;
+use fontdue::layout::{TextStyle, GlyphPosition, LayoutSettings};
 
 use crate::dom::NodeType;
 use crate::font::TextLayout;
@@ -54,7 +54,7 @@ pub enum BoxType<'a> {
   Block(&'a StyledNode<'a>),
   Inline(&'a StyledNode<'a>),
   /// 匿名`block box`，用于存放多个`inline box`
-  AnonymousBlock,
+  AnonymousBlock(&'a StyledNode<'a>),
   /// 匿名`inline box`，一般是由块级box直接包含的文字产生
   AnonymousInline(&'a String),
   /// line box
@@ -66,7 +66,8 @@ pub enum BoxType<'a> {
 pub struct LayoutBox<'a> {
   pub box_model: Box,
   pub box_type: BoxType<'a>,
-  pub children: Vec<LayoutBox<'a>>
+  pub children: Vec<LayoutBox<'a>>,
+  pub glyphs: Vec<GlyphPosition>,
 }
 
 impl EdgeSizes {
@@ -134,7 +135,8 @@ impl<'a> LayoutBox<'a> {
     LayoutBox {
       box_model: Box::default(),
       box_type,
-      children: vec!()
+      children: vec![],
+      glyphs: vec![]
     }
   }
 
@@ -143,41 +145,44 @@ impl<'a> LayoutBox<'a> {
   /// 主要是判断在`block`节点内混用`inline`和`block`节点时，需要对连续的`inline`节点人为增加匿名容器
   fn get_inline_container(&mut self) -> &mut Self {
     // 本身如果是匿名块级box或内联box则无需新建容器
-    if let BoxType::Inline(_) | BoxType::AnonymousBlock = self.box_type {
-      self
-    } else {
-      // TODO: 上一个元素如果正好是匿名块级box则无需再新建，直接共用？标准里好像没见到……
-      // 按理说，如果自身是block box，且子级正好是非匿名的inline box还有必要借用匿名block box吗？
-      if let Some(&LayoutBox { box_type: BoxType::AnonymousBlock, .. }) = self.children.last() {
-        //
-      } else {
-        self.children.push(LayoutBox::new(BoxType::AnonymousBlock));
-      }
-      self.children.last_mut().unwrap() // 返回匿名块级box
+    match self.box_type {
+      BoxType::Inline(_) | BoxType::AnonymousBlock(_) => self,
+      BoxType::Block(style_node) => {
+        // TODO: 上一个元素如果正好是匿名块级box则无需再新建，直接共用？标准里好像没见到……
+        // 按理说，如果自身是block box，且子级正好是非匿名的inline box还有必要借用匿名block box吗？
+        if let Some(&LayoutBox { box_type: BoxType::AnonymousBlock(_), .. }) = self.children.last() {
+          //
+        } else {
+          self.children.push(LayoutBox::new(BoxType::AnonymousBlock(style_node)));
+        }
+        self.children.last_mut().unwrap() // 返回匿名块级box
+      },
+      _ => self // 其他的情况应该不需要处理
     }
   }
 
   /// 获取样式节点
   fn get_style_node<'b>(&'b self) -> &'b StyledNode<'b> {
-    if let BoxType::Block(style_node) | BoxType::Inline(style_node) = self.box_type {
+    if let BoxType::Block(style_node) | BoxType::Inline(style_node) | BoxType::AnonymousBlock(style_node) = self.box_type {
       &style_node
     } else {
-      panic!("匿名结点没有样式")
+      // TODO: 其他盒模型的样式与继承
+      panic!("匿名结点没有样式！{:#?}", self.box_type)
     }
   }
 
   /// 计算块级元素宽度
-  fn calc_block_width(&mut self, containing_block: Box) {
+  fn calc_block_width(&mut self, containing_block: Box, is_anonymous: bool) {
     let style_node = self.get_style_node();
     let auto = CSSValue::Keyword(String::from("auto"));
     let zero = CSSValue::Length(0.0, CSSUnit::Px);
     let mut width = style_node.get_val("width").unwrap_or(auto.clone());
-    let mut margin_left = style_node.look_up("margin-left", "margin", &zero);
-    let mut margin_right = style_node.look_up("margin-right", "margin", &zero);
-    let padding_left = style_node.look_up("padding-left", "padding", &zero);
-    let padding_right = style_node.look_up("padding-right", "padding", &zero);
-    let border_left = style_node.look_up("border-left-width", "border-width", &zero);
-    let border_right = style_node.look_up("border-right-width", "border-width", &zero);
+    let mut margin_left = if is_anonymous { zero.clone() } else { style_node.look_up("margin-left", "margin", &zero) };
+    let mut margin_right = if is_anonymous { zero.clone() } else { style_node.look_up("margin-right", "margin", &zero) };
+    let padding_left = if is_anonymous { zero.clone() } else { style_node.look_up("padding-left", "padding", &zero) };
+    let padding_right = if is_anonymous { zero.clone() } else { style_node.look_up("padding-right", "padding", &zero) };
+    let border_left = if is_anonymous { zero.clone() } else { style_node.look_up("border-left-width", "border-width", &zero) };
+    let border_right = if is_anonymous { zero.clone() } else { style_node.look_up("border-right-width", "border-width", &zero) };
     let total_width: f32 = [
       &margin_left,
       &border_left,
@@ -252,16 +257,20 @@ impl<'a> LayoutBox<'a> {
   /// 
   /// 因为`rust`限制了在同一作用域对同一变量同时进行可变和不可变引用
   fn get_box_vertical_info(&self) -> (f32, f32, f32, f32, f32, f32) {
-    let style_node = self.get_style_node();
-    let zero = CSSValue::Length(0.0, CSSUnit::Px);
-    (
-      style_node.look_up("margin-top", "margin", &zero).to_px(),
-      style_node.look_up("margin-bottom", "margin", &zero).to_px(),
-      style_node.look_up("border-top-width", "border-width", &zero).to_px(),
-      style_node.look_up("border-bottom-width", "border-width", &zero).to_px(),
-      style_node.look_up("padding-top", "padding", &zero).to_px(),
-      style_node.look_up("padding-bottom", "padding", &zero).to_px(),
-    )
+    if let BoxType::AnonymousBlock(_) = self.box_type {
+      (0.0, 0.0, 0.0, 0.0, 0.0, 0.0) // 匿名块级元素应该忽略样式
+    } else {
+      let style_node = self.get_style_node();
+      let zero = CSSValue::Length(0.0, CSSUnit::Px);
+      (
+        style_node.look_up("margin-top", "margin", &zero).to_px(),
+        style_node.look_up("margin-bottom", "margin", &zero).to_px(),
+        style_node.look_up("border-top-width", "border-width", &zero).to_px(),
+        style_node.look_up("border-bottom-width", "border-width", &zero).to_px(),
+        style_node.look_up("padding-top", "padding", &zero).to_px(),
+        style_node.look_up("padding-bottom", "padding", &zero).to_px(),
+      )
+    }
   }
 
   /// 计算块级元素位置
@@ -278,11 +287,13 @@ impl<'a> LayoutBox<'a> {
     box_model.content.x = containing_block.content.x + box_model.margin.left + box_model.border.left + box_model.padding.left;
     // 当前包含块的高度就是之前的子级元素撑开的高度，需要累加到当前元素的偏移中！
     box_model.content.y = containing_block.content.y + containing_block.content.height + box_model.margin.top + box_model.border.top + box_model.padding.top;
+    println!("border box: {:#?}", box_model.border);
+    println!("padding box: {:#?}", box_model.padding);
+    println!("content box: {:#?}", box_model.content);
   }
 
   /// 计算块级元素高度
   fn calc_block_height(&mut self) {
-    // TODO: 块级元素排列算法
     if let Some(CSSValue::Length(height, CSSUnit::Px)) = self.get_style_node().get_val("height") {
       self.box_model.content.height = height;
     }
@@ -296,7 +307,6 @@ impl<'a> LayoutBox<'a> {
     for child in &mut self.children {
       // 自顶向下计算元素布局
       child.calc_layout(*box_model);
-      // child.get_inline_container();
       // 自底向上计算元素高度
       box_model.content.height = box_model.content.height + child.box_model.margin_box().height;
     }
@@ -342,7 +352,7 @@ impl<'a> LayoutBox<'a> {
     while self.children.len() > 0 {
       let mut cur_child = self.children.remove(0);
       match cur_child.box_type {
-        BoxType::Block(_) | BoxType::AnonymousBlock | BoxType::AnonymousInline(_) => {
+        BoxType::Block(_) | BoxType::AnonymousBlock(_) | BoxType::AnonymousInline(_) => {
           all_children.push(cur_child)
         },
         BoxType::Inline(_) => {
@@ -356,12 +366,16 @@ impl<'a> LayoutBox<'a> {
     while all_children.len() > 0 {
       let mut cur_child = all_children.remove(0);
       match cur_child.box_type {
-        BoxType::Block(_) | BoxType::AnonymousBlock => {
+        BoxType::Block(_) | BoxType::AnonymousBlock(_) => {
           line_and_children.push(cur_child)
         },
         BoxType::AnonymousInline(content) => {
           let (w, h) = cur_child.calc_text_layout(content);
+          println!("文本宽高: {w}, {h}; {content}");
+          let text_layout = get_text_layout();
+          cur_child.box_model.content.width = w;
           cur_child.box_model.content.height = h; // 设置行高
+          cur_child.glyphs = text_layout.layout.glyphs().clone(); // TODO: 不知道这里能不能引用，主要是担心clear操作会清空
           let mut last_line: Option<&mut LayoutBox> = None;
 
           for child in line_and_children.iter_mut() {
@@ -381,6 +395,7 @@ impl<'a> LayoutBox<'a> {
           let rest_width = last_line_box.get_line_rest_width();
 
           if rest_width >= w {
+            println!("剩余宽度: {rest_width}");
             cur_child.box_model.content.x = last_line_box.box_model.content.width - rest_width; // 水平排列
             last_line_box.children.push(cur_child);
           } else { // line box剩余宽度不够时则新加一行（目前不考虑单行文本换行的情况）
@@ -400,9 +415,9 @@ impl<'a> LayoutBox<'a> {
     self.children = line_and_children;
   }
 
-  fn calc_block_layout(&mut self, containing_block: Box) {
+  fn calc_block_layout(&mut self, containing_block: Box, is_anonymous: bool) {
     // 自顶向下计算宽度和起点
-    self.calc_block_width(containing_block);
+    self.calc_block_width(containing_block, is_anonymous);
     self.calc_block_position(containing_block);
     self.calc_block_children();
     // 自底向上计算高度
@@ -428,18 +443,30 @@ impl<'a> LayoutBox<'a> {
   /// 计算单行文本的宽高信息
   fn calc_text_layout(&self, text: &String) -> (f32, f32) {
     let text_layout = get_text_layout();
-    text_layout.layout.clear();
-    text_layout.layout.append(&text_layout.fonts, &TextStyle::new(text.as_str(), 14.0, 0));
+    // text_layout.layout.clear();
+    text_layout.layout.reset(&LayoutSettings {
+      max_width: Some(10000.0), // 暂时不考虑换行
+      ..Default::default()
+    });
+    text_layout.layout.append(&text_layout.fonts, &TextStyle::new(text.as_str(), 16.0, 0));
+    // TODO: 除了超出宽度的自动换行，还有换行符可以直接触发换行，因此当文字中有换行符就不可控了
     let last_text = text_layout.layout.glyphs().last().unwrap();
-    // 文字的起始位置取决于最近的一个line box；不过box没有布局节点信息……
+    // 文字的起始位置取决于最近的一个line box；
     (last_text.x + (last_text.width as f32), text_layout.layout.height())
   }
 
   /// 计算line box的布局信息
   fn calc_line_box_layout(&mut self, containing_block: Box) {
     let max_h = self.children.iter().map(|child| child.box_model.content.height).max_by(|a, b| a.total_cmp(b)).unwrap();
-    self.box_model.content.y = containing_block.content.height; // 竖直位置取决于当前包含块高度
+    self.box_model.content.x = containing_block.content.x;
+    self.box_model.content.y = containing_block.content.y + containing_block.content.height; // 竖直位置取决于当前包含块高度
     self.box_model.content.height = max_h; // 高度取决于当前包含的最高的inline box
+    println!("line box: {:#?}", self.box_model.content);
+    // 同时修正line box下所有子级的位置
+    for child in self.children.iter_mut() {
+      child.box_model.content.x += self.box_model.content.x;
+      child.box_model.content.y += self.box_model.content.y;
+    }
   }
 
   fn calc_layout(&mut self, containing_block: Box) {
@@ -447,12 +474,13 @@ impl<'a> LayoutBox<'a> {
 
     // 经过line box的重新组织后，这里应该不再会出现inline/匿名inline的情况了
     match self.box_type {
-      BoxType::Block(_) => self.calc_block_layout(containing_block),
+      BoxType::Block(_) => self.calc_block_layout(containing_block, false),
       // TODO: line box怎么确定？line box只由IFC产生，那么应该都是在inline box内部？
       // 根据测试(https://codepen.io/xxf1996/pen/oNyLWLd)，同一个line box可能包含多个不同inline box的内容；因此line box确实只能存在block box内？
-      BoxType::AnonymousBlock => {
+      BoxType::AnonymousBlock(_) => {
         // TODO: 匿名容器布局计算
-        self.calc_block_layout(containing_block)
+        println!("AnonymousBlock");
+        self.calc_block_layout(containing_block, true) // TODO: 匿名block不应该再计算padding/border/margin及一些样式，不然就重复了
       },
       BoxType::Line => {
         self.calc_line_box_layout(containing_block)
@@ -489,7 +517,7 @@ fn get_layout_tree_struct<'a>(style_tree: &'a StyledNode<'a>) -> LayoutBox<'a> {
   root
 }
 
-fn get_text_layout<'a>() -> &'a mut TextLayout {
+pub fn get_text_layout<'a>() -> &'a mut TextLayout {
   unsafe {
     if TEXT_LAYOUTS.len() == 0 {
       panic!("文字布局还未加载成功！")

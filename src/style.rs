@@ -22,7 +22,9 @@ pub struct StyledNode<'a> {
   pub node: &'a Node,
   pub children: Vec<StyledNode<'a>>,
   /// 该节点命中的样式信息
-  pub style: NodeStyle
+  pub style: NodeStyle,
+  /// 父级样式，用于继承
+  pub parent: Option<&'a NodeStyle>
 }
 
 #[derive(Debug)]
@@ -146,7 +148,8 @@ fn style_tree<'a>(root: &'a Node, stylesheets: &'a Vec<Stylesheet>) -> StyledNod
       } else {
         Some(style_tree(child, stylesheets))
       })
-      .collect()
+      .collect(),
+    parent: None // TODO: 到底是直接存样式还是存style node？
   }
 }
 

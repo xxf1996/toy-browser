@@ -150,7 +150,7 @@ fn get_display_command<'a, 'b>(layout_box: &'a LayoutBox, display_list: &'b mut 
 
 /// 获取布局结点的某个样式颜色
 fn get_color(layout_box: &LayoutBox, color_name: &str) -> Option<CSSColor> {
-  if let BoxType::Block(style_node) | BoxType::Inline(style_node) = layout_box.box_type {
+  if let BoxType::Block(style_node) | BoxType::Inline(style_node) = &layout_box.box_type {
     if let Some(CSSValue::Color(color)) = style_node.get_val(color_name) {
       Some(color)
     } else {

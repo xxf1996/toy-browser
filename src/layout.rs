@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use fontdue::layout::{TextStyle, GlyphPosition, LayoutSettings};
 
 use crate::dom::NodeType;
@@ -51,10 +53,10 @@ pub struct Box {
 /// 盒模型类型
 #[derive(Debug)]
 pub enum BoxType<'a> {
-  Block(&'a StyledNode<'a>),
-  Inline(&'a StyledNode<'a>),
+  Block(Rc<StyledNode<'a>>),
+  Inline(Rc<StyledNode<'a>>),
   /// 匿名`block box`，用于存放多个`inline box`
-  AnonymousBlock(&'a StyledNode<'a>),
+  AnonymousBlock(Rc<StyledNode<'a>>),
   /// 匿名`inline box`，一般是由块级box直接包含的文字产生
   AnonymousInline(&'a String),
   /// line box
@@ -145,7 +147,7 @@ impl<'a> LayoutBox<'a> {
   /// 主要是判断在`block`节点内混用`inline`和`block`节点时，需要对连续的`inline`节点人为增加匿名容器
   fn get_inline_container(&mut self) -> &mut Self {
     // 本身如果是匿名块级box或内联box则无需新建容器
-    match self.box_type {
+    match &self.box_type {
       BoxType::Inline(_) | BoxType::AnonymousBlock(_) => self,
       BoxType::Block(style_node) => {
         // TODO: 上一个元素如果正好是匿名块级box则无需再新建，直接共用？标准里好像没见到……
@@ -153,7 +155,7 @@ impl<'a> LayoutBox<'a> {
         if let Some(&LayoutBox { box_type: BoxType::AnonymousBlock(_), .. }) = self.children.last() {
           //
         } else {
-          self.children.push(LayoutBox::new(BoxType::AnonymousBlock(style_node)));
+          self.children.push(LayoutBox::new(BoxType::AnonymousBlock(style_node.clone())));
         }
         self.children.last_mut().unwrap() // 返回匿名块级box
       },
@@ -162,9 +164,9 @@ impl<'a> LayoutBox<'a> {
   }
 
   /// 获取样式节点
-  fn get_style_node<'b>(&'b self) -> &'b StyledNode<'b> {
-    if let BoxType::Block(style_node) | BoxType::Inline(style_node) | BoxType::AnonymousBlock(style_node) = self.box_type {
-      &style_node
+  fn get_style_node(&self) -> Rc<StyledNode<'a>> {
+    if let BoxType::Block(style_node) | BoxType::Inline(style_node) | BoxType::AnonymousBlock(style_node) = &self.box_type {
+      style_node.clone()
     } else {
       // TODO: 其他盒模型的样式与继承
       panic!("匿名结点没有样式！{:#?}", self.box_type)
@@ -491,25 +493,25 @@ impl<'a> LayoutBox<'a> {
 }
 
 /// 生成布局树结构（实际上是构建box tree）
-fn get_layout_tree_struct<'a>(style_tree: &'a StyledNode<'a>) -> LayoutBox<'a> {
+fn get_layout_tree_struct<'a>(style_tree: Rc<StyledNode<'a>>) -> LayoutBox<'a> {
   let mut root = LayoutBox::new(
     match style_tree.get_display() {
-      Display::Block => BoxType::Block(style_tree),
+      Display::Block => BoxType::Block(style_tree.clone()),
       Display::Inline => {
         if let NodeType::Text(content) = &style_tree.node.node_type {
           BoxType::AnonymousInline(&content)
         } else {
-          BoxType::Inline(style_tree)
+          BoxType::Inline(style_tree.clone())
         }
       },
       Display::None => panic!("根节点不能设置`display: none`")
     }
   );
 
-  for child in &style_tree.children {
+  for child in style_tree.children.borrow().iter() {
     match child.get_display() {
-      Display::Block => root.children.push(get_layout_tree_struct(child)),
-      Display::Inline => root.get_inline_container().children.push(get_layout_tree_struct(child)),
+      Display::Block => root.children.push(get_layout_tree_struct(child.clone())),
+      Display::Inline => root.get_inline_container().children.push(get_layout_tree_struct(child.clone())),
       Display::None => {} // 跳过display为none的节点
     }
   }
@@ -527,7 +529,7 @@ pub fn get_text_layout<'a>() -> &'a mut TextLayout {
 }
 
 /// 从样式树生成布局树
-pub fn get_layout_tree<'a>(style_tree: &'a StyledNode<'a>, mut init_box: Box) -> LayoutBox<'a> {
+pub fn get_layout_tree<'a>(style_tree: Rc<StyledNode<'a>>, mut init_box: Box) -> LayoutBox<'a> {
   unsafe {
     // 初始化文字布局模块
     if TEXT_LAYOUTS.len() == 0 {

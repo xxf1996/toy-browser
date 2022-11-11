@@ -91,7 +91,7 @@ fn layout_tree_test() -> Result<(), Error> {
   // 模拟视窗
   let mut viewport = layout::Box::default();
   viewport.content.width = 1280.0;
-  let layout_tree = layout::get_layout_tree(&style_tree, viewport);
+  let layout_tree = layout::get_layout_tree(style_tree, viewport);
   println!("{:#?}", layout_tree);
   Ok(())
 }
@@ -107,7 +107,7 @@ fn painting_test() -> Result<(), Error> {
   // 模拟视窗
   let mut viewport = layout::Box::default();
   viewport.content.width = 1280.0;
-  let layout_tree = layout::get_layout_tree(&style_tree, viewport);
+  let layout_tree = layout::get_layout_tree(style_tree, viewport);
   let painting_res = raster::raster(&layout_tree);
   let mut save_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   save_path.push("result.png");

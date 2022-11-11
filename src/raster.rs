@@ -150,7 +150,7 @@ fn get_display_command<'a, 'b>(layout_box: &'a LayoutBox, display_list: &'b mut 
 
 /// 获取布局结点的某个样式颜色
 fn get_color(layout_box: &LayoutBox, color_name: &str) -> Option<CSSColor> {
-  if let BoxType::Block(style_node) | BoxType::Inline(style_node) = &layout_box.box_type {
+  if let BoxType::Block(style_node) | BoxType::Inline(style_node) | BoxType::AnonymousInline(_, style_node) = &layout_box.box_type {
     if let Some(CSSValue::Color(color)) = style_node.get_val(color_name) {
       Some(color)
     } else {
@@ -211,12 +211,13 @@ fn draw_background(layout_box: &LayoutBox, display_list: &mut Vec<DisplayCommand
   }
 }
 
+/// 绘制纯文本内容
 fn draw_content<'a, 'b>(layout_box: &'a LayoutBox, display_list: &'b mut Vec<DisplayCommand<'a>>) {
   match layout_box.box_type {
-    BoxType::AnonymousInline(_) => {
-      // TODO: 当前匿名box都丢失了样式信息
+    BoxType::AnonymousInline(..) => {
+      let color = get_color(layout_box, "color").unwrap_or(DEFAULT_FONT_COLOR);
       display_list.push(DisplayCommand::Text(TextRenderInfo {
-        color: DEFAULT_FONT_COLOR,
+        color,
         area: layout_box.box_model.content,
         glyphs: &layout_box.glyphs
       }))

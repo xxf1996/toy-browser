@@ -36,10 +36,26 @@ pub enum Display {
   None
 }
 
+/// 默认为可继承的样式属性
+static INHERIT_ATTRS: [&str; 1] = ["color"];
+
 impl<'a> StyledNode<'a> {
   /// 获取样式节点的某个样式属性值
   pub fn get_val(&self, name: &str) -> Option<CSSValue> {
+    if INHERIT_ATTRS.contains(&name) {
+      return self.get_inherit_val(name);
+    }
     self.style.get(name).map(|val| val.clone())
+  }
+
+  /// 从style tree向上查找可继承的属性值
+  fn get_inherit_val(&self, name: &str) -> Option<CSSValue> {
+    let self_val = self.style.get(name);
+    if let None = self_val {
+      self.parent.as_ref()?.upgrade()?.get_inherit_val(name)
+    } else {
+      self_val.map(|val| val.clone())
+    }
   }
 
   /// 获取样式节点的`display`类型
@@ -152,7 +168,7 @@ fn style_tree<'a>(root: &'a Node, stylesheets: &'a Vec<Stylesheet>, parent: Opti
         Some(style_tree(child, stylesheets, Some(Rc::downgrade(&styled_node)))) // 弱引用
       }
     } else {
-      Some(style_tree(child, stylesheets, None))
+      Some(style_tree(child, stylesheets, Some(Rc::downgrade(&styled_node))))
     })
     .collect();
 

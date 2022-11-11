@@ -57,8 +57,8 @@ pub enum BoxType<'a> {
   Inline(Rc<StyledNode<'a>>),
   /// 匿名`block box`，用于存放多个`inline box`
   AnonymousBlock(Rc<StyledNode<'a>>),
-  /// 匿名`inline box`，一般是由块级box直接包含的文字产生
-  AnonymousInline(&'a String),
+  /// 匿名`inline box`，一般是由块级box直接包含的文字产生，样式直接继承父级
+  AnonymousInline(&'a String, Rc<StyledNode<'a>>),
   /// line box
   Line
 }
@@ -321,7 +321,7 @@ impl<'a> LayoutBox<'a> {
     while self.children.len() > 0 {
       let mut child = self.children.remove(0);
       match child.box_type {
-        BoxType::AnonymousInline(_) => {
+        BoxType::AnonymousInline(..) => {
           all_children.push(child)
         },
         BoxType::Inline(_) => {
@@ -354,7 +354,7 @@ impl<'a> LayoutBox<'a> {
     while self.children.len() > 0 {
       let mut cur_child = self.children.remove(0);
       match cur_child.box_type {
-        BoxType::Block(_) | BoxType::AnonymousBlock(_) | BoxType::AnonymousInline(_) => {
+        BoxType::Block(_) | BoxType::AnonymousBlock(_) | BoxType::AnonymousInline(..) => {
           all_children.push(cur_child)
         },
         BoxType::Inline(_) => {
@@ -371,7 +371,7 @@ impl<'a> LayoutBox<'a> {
         BoxType::Block(_) | BoxType::AnonymousBlock(_) => {
           line_and_children.push(cur_child)
         },
-        BoxType::AnonymousInline(content) => {
+        BoxType::AnonymousInline(content, _) => {
           let (w, h) = cur_child.calc_text_layout(content);
           println!("文本宽高: {w}, {h}; {content}");
           let text_layout = get_text_layout();
@@ -499,7 +499,7 @@ fn get_layout_tree_struct<'a>(style_tree: Rc<StyledNode<'a>>) -> LayoutBox<'a> {
       Display::Block => BoxType::Block(style_tree.clone()),
       Display::Inline => {
         if let NodeType::Text(content) = &style_tree.node.node_type {
-          BoxType::AnonymousInline(&content)
+          BoxType::AnonymousInline(&content, style_tree.clone())
         } else {
           BoxType::Inline(style_tree.clone())
         }

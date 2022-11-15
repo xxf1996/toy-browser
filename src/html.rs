@@ -70,6 +70,11 @@ impl Parser {
     self.consume_while(char::is_whitespace);
   }
 
+  /// 消耗当前一行的连续字符
+  fn consume_line(&mut self) {
+    self.consume_while(|c| c != '\n');
+  }
+
   /// 解析标签名，实质上就是解析连续的`字母数字`字符串
   fn parse_tag_name(&mut self) -> String {
     // 匿名函数（rust中也称为闭包）；`..=`是连续范围操作符
@@ -97,15 +102,20 @@ impl Parser {
   /// 解析属性key
   fn parse_attr(&mut self) -> (String, String) {
     let name = self.parse_tag_name();
-    let next_char = self.consume_char();
+    self.consume_whitespace();
     // 空属性
     if name.is_empty() {
       return (String::from(""), String::from(""));
     }
+    if self.starts_with("=") {
+      let next_char = self.consume_char();
+      assert!(next_char == '=', "name: {}, next char: {}", name, next_char);
+      let val = self.parse_attr_val();
+      (name, val)
+    } else {
+      (name, String::from("true")) // 布尔属性
+    }
     // TODO: 这里实际上很多边界情况没有处理
-    assert!(next_char == '=', "name: {}, next char: {}", name, next_char);
-    let val = self.parse_attr_val();
-    (name, val)
   }
 
   /// 解析多个属性（实质上就是某个标签内的所有属性）
@@ -146,7 +156,8 @@ impl Parser {
     }
     assert!(self.consume_char() == '<');
     assert!(self.consume_char() == '/');
-    assert!(self.parse_tag_name() == tag_name);
+    let end_tag = self.parse_tag_name();
+    assert!(end_tag == tag_name, "tag name: {tag_name}, {end_tag}");
     assert!(self.consume_char() == '>');
     res
   }
@@ -177,6 +188,10 @@ impl Parser {
     if self.next_char() == '<' {
       if self.starts_with("<!--") { // 匹配注释开始部分
         self.parse_comment()
+      } else if self.starts_with("<!DOCTYPE") {
+        self.consume_line(); // 直接跳过doctype解析，同时避免报错
+        self.consume_whitespace();
+        self.parse_node()
       } else {
         self.parse_element()
       }

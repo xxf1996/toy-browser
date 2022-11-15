@@ -9,6 +9,7 @@ edition = "2021"
 image = "0.23.14"
 boa_engine = "0.16.0"
 fontdue = "0.7.2"
+gc = "0.4.1"
 
 [workspace]
 resolver = "2"
@@ -16,6 +17,10 @@ resolver = "2"
 [[example]]
 name = "boa-run"
 path = "example/boa-run/test.rs"
+
+[[example]]
+name = "boa-class-test"
+path = "example/boa-run/class-test.rs"
 
 [[example]]
 name = "layout-test"

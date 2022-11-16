@@ -7,9 +7,10 @@ edition = "2021"
 
 [dependencies]
 image = "0.23.14"
-boa_engine = "0.16.0"
+boa_engine = { version = "0.16.0", features = ["console"] }
 fontdue = "0.7.2"
 gc = "0.4.1"
+
 
 [workspace]
 resolver = "2"
@@ -21,6 +22,10 @@ path = "example/boa-run/test.rs"
 [[example]]
 name = "boa-class-test"
 path = "example/boa-run/class-test.rs"
+
+[[example]]
+name = "boa-classes"
+path = "example/boa-run/classes.rs"
 
 [[example]]
 name = "layout-test"

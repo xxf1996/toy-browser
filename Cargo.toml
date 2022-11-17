@@ -24,6 +24,10 @@ name = "boa-class-test"
 path = "example/boa-run/class-test.rs"
 
 [[example]]
+name = "boa-object-test"
+path = "example/boa-run/object-test.rs"
+
+[[example]]
 name = "boa-classes"
 path = "example/boa-run/classes.rs"
 

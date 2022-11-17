@@ -14,7 +14,11 @@ struct ToyClass {
 }
 
 impl ToyClass {
-  fn hello(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+  fn hello(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let js_obj = this.to_object(context).unwrap();
+    // downcast_ref 可以将jsValue转为对应的rust类型结构，前提是这个rust类型被注册到原生类型中？
+    let rs_obj = js_obj.downcast_ref::<ToyClass>().unwrap();
+    println!("this: {:#?}", rs_obj);
     if !args[0].is_string() {
       return Err(JsValue::Null);
     }
@@ -33,7 +37,6 @@ impl Class for ToyClass {
   const LENGTH: usize = 1; // 构造函数参数长度
 
   fn constructor(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<Self> {
-    println!("{}", this.type_of().as_str());
     let name = if args[0].is_string() {
       args[0].to_string(context).unwrap().to_string()
     } else {
@@ -55,13 +58,7 @@ fn main() {
   file_path.push("example/boa-run/class-test.js");
   let user_script = fs::read_to_string(&file_path).unwrap();
   let mut context = Context::default();
-  context.register_global_class::<ToyClass>().unwrap();
+  context.register_global_class::<ToyClass>().unwrap(); // 这里注册的class创建出来的对象都不能访问属性？
   context.register_global_property("ToyWindow", "Toy Window", Attribute::all());
-  let res = context.eval(&user_script);
-  if let Err(_) = res {
-    // let obj = reason.to_object(&mut context).unwrap();
-    println!("err")
-  } else {
-    println!("{:#?}", res.unwrap().to_string(&mut context).unwrap().as_str())
-  }
+  context.eval(&user_script).unwrap();
 }

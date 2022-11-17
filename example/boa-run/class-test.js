@@ -1,2 +1,3 @@
 const a = new Toy('aaa')
-JSON.stringify(Object.keys(a))
+a.hello('阿萨德发')
+console.log(a.constructor.name)

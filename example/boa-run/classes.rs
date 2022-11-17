@@ -139,7 +139,7 @@ fn main() {
     console.log('\'Hello\' string is not a Person class instance.');
   }
       console.log(Person.staticProperty);
-      console.log(person.inheritedProperty);
+      console.log(person.name, person.age, Object.keys(person), JSON.stringify(person));
     console.log(Person.prototype.inheritedProperty === person.inheritedProperty);
   ",
       )

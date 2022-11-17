@@ -7,7 +7,7 @@ pub struct TextLayout {
 
 impl TextLayout {
   pub fn default() -> Self {
-    let font_data = include_bytes!("../example/font/SourceHanSansCN-Regular.otf") as &[u8];
+    let font_data = include_bytes!("../example/font/SmileySans-Oblique.otf") as &[u8];
     let font = fontdue::Font::from_bytes(font_data, fontdue::FontSettings::default()).unwrap();
     Self { layout: Layout::new(CoordinateSystem::PositiveYDown), fonts: [font] }
   }

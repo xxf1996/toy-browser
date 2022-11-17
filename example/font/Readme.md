@@ -10,7 +10,7 @@
 
 - [思源黑体 (行高修正版)-字体免费下载-文悦字库官网](https://wenyue.cn/fonts/1504)
 - [Chinese Fonts: An Open Source, Personal and Non-commercial Collection - LingData | Linguistic Datasets](https://lingdata.org/archives/fonts.html)
-- 
+- [atelier-anchor/smiley-sans: 得意黑 Smiley Sans：一款在人文观感和几何特征中寻找平衡的中文黑体](https://github.com/atelier-anchor/smiley-sans)
 
 
 

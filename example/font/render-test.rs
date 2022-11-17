@@ -12,7 +12,7 @@ fn get_font_color(bg_color: Rgba<u8>, base_color: Rgba<u8>, mask_color: u8) -> R
 }
 
 fn main() {
-  let font_data = include_bytes!("./SourceHanSansCN-Regular.otf") as &[u8];
+  let font_data = include_bytes!("./SmileySans-Oblique.otf") as &[u8];
   let font = fontdue::Font::from_bytes(font_data, fontdue::FontSettings::default()).unwrap();
 
   let fonts = &[font];

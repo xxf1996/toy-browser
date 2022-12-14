@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use fontdue::layout::{TextStyle, GlyphPosition, LayoutSettings};
 
@@ -53,12 +53,12 @@ pub struct Box {
 /// 盒模型类型
 #[derive(Debug)]
 pub enum BoxType<'a> {
-  Block(Rc<StyledNode<'a>>),
-  Inline(Rc<StyledNode<'a>>),
+  Block(Arc<StyledNode<'a>>),
+  Inline(Arc<StyledNode<'a>>),
   /// 匿名`block box`，用于存放多个`inline box`
-  AnonymousBlock(Rc<StyledNode<'a>>),
+  AnonymousBlock(Arc<StyledNode<'a>>),
   /// 匿名`inline box`，一般是由块级box直接包含的文字产生，样式直接继承父级
-  AnonymousInline(&'a String, Rc<StyledNode<'a>>),
+  AnonymousInline(&'a String, Arc<StyledNode<'a>>),
   /// line box
   Line
 }
@@ -164,7 +164,7 @@ impl<'a> LayoutBox<'a> {
   }
 
   /// 获取样式节点
-  fn get_style_node(&self) -> Rc<StyledNode<'a>> {
+  fn get_style_node(&self) -> Arc<StyledNode<'a>> {
     if let BoxType::Block(style_node) | BoxType::Inline(style_node) | BoxType::AnonymousBlock(style_node) = &self.box_type {
       style_node.clone()
     } else {
@@ -493,7 +493,7 @@ impl<'a> LayoutBox<'a> {
 }
 
 /// 生成布局树结构（实际上是构建box tree）
-fn get_layout_tree_struct<'a>(style_tree: Rc<StyledNode<'a>>) -> LayoutBox<'a> {
+fn get_layout_tree_struct<'a>(style_tree: Arc<StyledNode<'a>>) -> LayoutBox<'a> {
   let mut root = LayoutBox::new(
     match style_tree.get_display() {
       Display::Block => BoxType::Block(style_tree.clone()),
@@ -508,13 +508,17 @@ fn get_layout_tree_struct<'a>(style_tree: Rc<StyledNode<'a>>) -> LayoutBox<'a> {
     }
   );
 
-  for child in style_tree.children.borrow().iter() {
+  let children = style_tree.children.lock().unwrap();
+
+  for child in children.iter() {
     match child.get_display() {
       Display::Block => root.children.push(get_layout_tree_struct(child.clone())),
       Display::Inline => root.get_inline_container().children.push(get_layout_tree_struct(child.clone())),
       Display::None => {} // 跳过display为none的节点
     }
   }
+
+  drop(children);
 
   root
 }
@@ -529,7 +533,7 @@ pub fn get_text_layout<'a>() -> &'a mut TextLayout {
 }
 
 /// 从样式树生成布局树
-pub fn get_layout_tree<'a>(style_tree: Rc<StyledNode<'a>>, mut init_box: Box) -> LayoutBox<'a> {
+pub fn get_layout_tree<'a>(style_tree: Arc<StyledNode<'a>>, mut init_box: Box) -> LayoutBox<'a> {
   unsafe {
     // 初始化文字布局模块
     if TEXT_LAYOUTS.len() == 0 {

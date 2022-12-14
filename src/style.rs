@@ -14,7 +14,7 @@ use crate::css::{
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::{Weak, Rc};
+use std::sync::{ Arc, Weak, Mutex };
 
 type NodeStyle = HashMap<String, CSSValue>;
 
@@ -22,7 +22,7 @@ type NodeStyle = HashMap<String, CSSValue>;
 #[derive(Debug)]
 pub struct StyledNode<'a> {
   pub node: &'a Node,
-  pub children: RefCell<Vec<Rc<StyledNode<'a>>>>, // RefCell允许引用值可变：https://course.rs/advance/smart-pointer/cell-refcell.html
+  pub children: Mutex<Vec<Arc<StyledNode<'a>>>>, // RefCell允许引用值可变：https://course.rs/advance/smart-pointer/cell-refcell.html
   /// 该节点命中的样式信息
   pub style: NodeStyle,
   /// 父级样式节点，用于继承
@@ -147,35 +147,39 @@ fn specified_values(element: &ElementData, stylesheets: &Vec<Stylesheet>) -> Nod
 }
 
 /// 递归方法，从`DOM tree`根节点进行样式匹配，生成对应的`style tree`
-fn style_tree<'a>(root: &'a Node, stylesheets: &'a Vec<Stylesheet>, parent: Option<Weak<StyledNode<'a>>>) -> Rc<StyledNode<'a>> {
-  let styled_node = Rc::new(StyledNode {
+fn style_tree<'a>(root: &'a Node, stylesheets: &'a Vec<Stylesheet>, parent: Option<Weak<StyledNode<'a>>>) -> Arc<StyledNode<'a>> {
+  let styled_node = Arc::new(StyledNode {
     node: root,
     style: match root.node_type {
       NodeType::Element(ref element) => specified_values(element, stylesheets),
       NodeType::Text(_) => HashMap::new(),
       _ => HashMap::new()
     },
-    children: RefCell::new(vec![]),
+    children: Mutex::new(vec![]),
     parent
   });
 
-  *styled_node.children.borrow_mut() = root.children
+  let mut children = styled_node.children.lock().unwrap(); // 获取互斥锁
+
+  *children = root.children
     .iter()
     .filter_map(|child| if let NodeType::Element(elem) = &child.node_type {
       if elem.tag_name == "head" {
         None // 跳过head的解析
       } else {
-        Some(style_tree(child, stylesheets, Some(Rc::downgrade(&styled_node)))) // 弱引用
+        Some(style_tree(child, stylesheets, Some(Arc::downgrade(&styled_node)))) // 弱引用
       }
     } else {
-      Some(style_tree(child, stylesheets, Some(Rc::downgrade(&styled_node))))
+      Some(style_tree(child, stylesheets, Some(Arc::downgrade(&styled_node))))
     })
     .collect();
+
+  drop(children); // 释放锁
 
   styled_node
 }
 
 /// 根据文档对象生成对应的`style tree`
-pub fn get_style_tree<'a>(document: &'a Document) -> Rc<StyledNode<'a>> {
+pub fn get_style_tree<'a>(document: &'a Document) -> Arc<StyledNode<'a>> {
   style_tree(&document.root, &document.stylesheets, None)
 }

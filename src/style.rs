@@ -180,6 +180,12 @@ fn style_tree<'a>(root: &'a Node, stylesheets: &'a Vec<Stylesheet>, parent: Opti
 }
 
 /// 根据文档对象生成对应的`style tree`
-pub fn get_style_tree<'a>(document: &'a Document) -> Arc<StyledNode<'a>> {
-  style_tree(&document.root, &document.stylesheets, None)
+pub fn get_style_tree<'a>(document_data: Arc<Mutex<Option<Document>>>) -> Arc<StyledNode<'a>> {
+  let document_ref = document_data.lock().unwrap();
+  if let Some(document) = &*document_ref {
+    // FIXME: 难道这里只能把所有的引用变成Arc指针？
+    style_tree(&document.root, &document.stylesheets, None)
+  } else {
+    panic!("没有document数据！")
+  }
 }

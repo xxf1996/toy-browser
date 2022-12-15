@@ -45,7 +45,7 @@ impl PageThread {
     let (layout_sender, layout_recevier) = mpsc::channel::<(Arc<StyledNode>, layout::Box)>();
     let (raster_sender, raster_recevier) = mpsc::channel::<LayoutBox>();
     let style_local_sender = style_sender.clone();
-    let layout_local_sender = layout_sender.clone();
+    // let layout_local_sender = layout_sender.clone();
     let raster_local_sender = raster_sender.clone();
     let document_store: Arc<Mutex<Option<Document>>> = Arc::new(Mutex::new(None));
     let document_data = document_store.clone();
@@ -65,9 +65,10 @@ impl PageThread {
       for document in style_recevier {
         let mut document_ref = document_data.lock().unwrap();
         *document_ref = Some(document);
-        if let Some(data) = &*document_ref {
-          let style_tree = style::get_style_tree(data);
-          layout_local_sender.send((style_tree, viewport));
+        if let Some(_) = &*document_ref {
+          let style_tree = style::get_style_tree(document_data.clone());
+          println!("{:?}", style_tree);
+          layout_sender.send((style_tree, viewport));
         }
       }
     });

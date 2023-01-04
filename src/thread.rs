@@ -58,14 +58,14 @@ impl PageThread {
       }
     });
 
-    // FIXME: Arc<T>不是线程安全的内存，因此不被支持send！同理，RefCell<T>也是适用于单线程的；
+    // Rc<T>不是线程安全的内存，因此不被支持send！同理，RefCell<T>也是适用于单线程的；
     // https://kaisery.github.io/trpl-zh-cn/ch16-04-extensible-concurrency-sync-and-send.html
     // [rust - Is it safe to `Send` struct containing `Arc` if strong_count is 1 and weak_count is 0? - Stack Overflow](https://stackoverflow.com/questions/58977260/is-it-safe-to-send-struct-containing-rc-if-strong-count-is-1-and-weak-count)
     let style_thread = thread::spawn(move || {
       for document in style_recevier {
         let mut document_ref = document_data.lock().unwrap();
         *document_ref = Some(document);
-        if let Some(_) = &*document_ref {
+        if document_ref.is_some() {
           let style_tree = style::get_style_tree(document_data.clone());
           println!("{:?}", style_tree);
           layout_sender.send((style_tree, viewport));
@@ -93,6 +93,28 @@ impl PageThread {
       style_thread,
       layout_thread,
       raster_thread
+    }
+  }
+
+  // TODO: 把进程间的数据传递改为mutex
+  pub fn new_v2(viewport: layout::Box, save_path: String) -> Self {
+    let (html_sender, html_recevier) = mpsc::channel::<String>();
+    let (style_sender, style_recevier) = mpsc::channel::<()>();
+    let style_local_sender = style_sender.clone();
+    let document_store: Arc<Mutex<Option<Document>>> = Arc::new(Mutex::new(None));
+    let document_ref = document_store.clone();
+
+    let html_thread = thread::spawn(move || {
+      for msg in html_recevier {
+        let document = document_ref.lock().unwrap();
+        *document = Some(html::parse(msg));
+        style_local_sender.send(()).unwrap();
+      }
+    });
+
+    Self {
+      html_sender,
+      html_thread,
     }
   }
 

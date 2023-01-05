@@ -66,7 +66,8 @@ impl PageThread {
         let mut document_ref = document_data.lock().unwrap();
         *document_ref = Some(document);
         if document_ref.is_some() {
-          let style_tree = style::get_style_tree(document_data.clone());
+          let document = document_ref.take().unwrap(); // Option的take方法可以直接拿走Some数据：https://stackoverflow.com/questions/30573188/cannot-move-data-out-of-a-mutex
+          let style_tree = style::get_style_tree(document);
           println!("{:?}", style_tree);
           layout_sender.send((style_tree, viewport));
         }
@@ -97,26 +98,73 @@ impl PageThread {
   }
 
   // TODO: 把进程间的数据传递改为mutex
-  pub fn new_v2(viewport: layout::Box, save_path: String) -> Self {
-    let (html_sender, html_recevier) = mpsc::channel::<String>();
-    let (style_sender, style_recevier) = mpsc::channel::<()>();
-    let style_local_sender = style_sender.clone();
-    let document_store: Arc<Mutex<Option<Document>>> = Arc::new(Mutex::new(None));
-    let document_ref = document_store.clone();
+  // pub fn new_v2(viewport: layout::Box, save_path: String) -> Self {
+  //   let (html_sender, html_recevier) = mpsc::channel::<String>();
+  //   let (style_sender, style_recevier) = mpsc::channel::<()>();
+  //   let (layout_sender, layout_recevier) = mpsc::channel::<()>();
+  //   let (raster_sender, raster_recevier) = mpsc::channel::<()>();
+  //   let style_local_sender = style_sender.clone();
+  //   let document_store: Arc<Mutex<Option<Document>>> = Arc::new(Mutex::new(None));
+  //   let document_ref = document_store.clone();
+  //   let style_tree_store: Arc<Mutex<Option<Arc<StyledNode>>>> = Arc::new(Mutex::new(None));
+  //   let style_tree_ref = style_tree_store.clone();
+  //   let layout_tree_store: Arc<Mutex<Option<LayoutBox>>> = Arc::new(Mutex::new(None));
+  //   let layout_tree_ref = layout_tree_store.clone();
 
-    let html_thread = thread::spawn(move || {
-      for msg in html_recevier {
-        let document = document_ref.lock().unwrap();
-        *document = Some(html::parse(msg));
-        style_local_sender.send(()).unwrap();
-      }
-    });
+  //   let html_thread = thread::spawn(move || {
+  //     for msg in html_recevier {
+  //       let mut document = document_ref.lock().unwrap();
+  //       *document = Some(html::parse(msg));
+  //       style_local_sender.send(()).unwrap();
+  //     }
+  //   });
 
-    Self {
-      html_sender,
-      html_thread,
-    }
-  }
+  //   let document_ref_style = document_store.clone();
+
+  //   let style_thread = thread::spawn(move || {
+  //     for _ in style_recevier {
+  //       let document = document_ref_style.lock().unwrap();
+  //       if let Some(data) = &*document {
+  //         let mut style_tree = style_tree_ref.lock().unwrap();
+  //         *style_tree = Some(style::get_style_tree(data));
+  //         layout_sender.send(()).unwrap();
+  //       }
+  //     }
+  //   });
+
+  //   let style_tree_ref_layout = style_tree_store.clone();
+
+  //   let layout_thread = thread::spawn(move || {
+  //     for _ in layout_recevier {
+  //       let style_tree = style_tree_ref_layout.lock().unwrap();
+  //       if let Some(data) = &*style_tree {
+  //         let mut layout_tree = layout_tree_ref.lock().unwrap();
+  //         *layout_tree = Some(layout::get_layout_tree(data.clone(), viewport));
+  //         raster_sender.send(()).unwrap();
+  //       }
+  //     }
+  //   });
+
+  //   let layout_tree_ref_raster = layout_tree_store.clone();
+
+  //   let raster_thread = thread::spawn(move || {
+  //     for _ in raster_recevier {
+  //       let layout_tree = layout_tree_ref_raster.lock().unwrap();
+  //       if let Some(data) = &*layout_tree {
+  //         let painting_res = raster::raster(data);
+  //         painting_res.save(&save_path);
+  //       }
+  //     }
+  //   });
+
+  //   Self {
+  //     html_sender,
+  //     html_thread,
+  //     style_thread,
+  //     layout_thread,
+  //     raster_thread
+  //   }
+  // }
 
   pub fn join(self) -> Result<(), Box<dyn Any + Send>> {
     self.html_thread.join()?;

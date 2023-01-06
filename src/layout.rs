@@ -6,7 +6,7 @@ use crate::dom::NodeType;
 use crate::font::TextLayout;
 use crate::style::{
   StyledNode,
-  Display
+  Display, StyleTree
 };
 use crate::css::{
   CSSValue,
@@ -70,6 +70,10 @@ pub struct LayoutBox<'a> {
   pub box_type: BoxType<'a>,
   pub children: Vec<LayoutBox<'a>>,
   pub glyphs: Vec<GlyphPosition>,
+}
+
+pub struct LayoutTree {
+  pub style_tree: StyleTree
 }
 
 impl EdgeSizes {
@@ -532,17 +536,20 @@ pub fn get_text_layout<'a>() -> &'a mut TextLayout {
   }
 }
 
-/// 从样式树生成布局树
-pub fn get_layout_tree<'a>(style_tree: Arc<StyledNode<'a>>, mut init_box: Box) -> LayoutBox<'a> {
-  unsafe {
-    // 初始化文字布局模块
-    if TEXT_LAYOUTS.len() == 0 {
-      TEXT_LAYOUTS.push(TextLayout::default())
+impl LayoutTree {
+  /// 从样式树生成布局树
+  pub fn get_layout_tree<'a>(&'a self, mut init_box: Box) -> LayoutBox<'a> {
+    let style_tree = self.style_tree.get_style_tree();
+    unsafe {
+      // 初始化文字布局模块
+      if TEXT_LAYOUTS.len() == 0 {
+        TEXT_LAYOUTS.push(TextLayout::default())
+      }
     }
+    init_box.content.height = 0.0;
+    let mut root_box = get_layout_tree_struct(style_tree);
+    root_box.calc_layout(init_box);
+    root_box
   }
-  init_box.content.height = 0.0;
-  let mut root_box = get_layout_tree_struct(style_tree);
-  root_box.calc_layout(init_box);
-  root_box
 }
 

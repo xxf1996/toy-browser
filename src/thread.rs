@@ -5,8 +5,8 @@ use std::thread::{self, JoinHandle};
 
 use crate::dom::{Document};
 use crate::{html, style, layout, raster};
-use crate::layout::{LayoutBox};
-use crate::style::StyledNode;
+use crate::layout::{LayoutBox, LayoutTree};
+use crate::style::{StyledNode, StyleTree};
 
 enum ThreadInput<'a> {
   Html(String),
@@ -42,19 +42,17 @@ impl PageThread {
   pub fn new(viewport: layout::Box, save_path: String) -> Self {
     let (html_sender, html_recevier) = mpsc::channel::<String>();
     let (style_sender, style_recevier) = mpsc::channel::<Document>();
-    let (layout_sender, layout_recevier) = mpsc::channel::<(Arc<StyledNode>, layout::Box)>();
-    let (raster_sender, raster_recevier) = mpsc::channel::<LayoutBox>();
-    let style_local_sender = style_sender.clone();
-    // let layout_local_sender = layout_sender.clone();
-    let raster_local_sender = raster_sender.clone();
+    let (layout_sender, layout_recevier) = mpsc::channel::<StyleTree>();
+    let (raster_sender, raster_recevier) = mpsc::channel::<LayoutTree>();
+    // let style_local_sender = style_sender.clone();
+    // let raster_local_sender = raster_sender.clone();
     let document_store: Arc<Mutex<Option<Document>>> = Arc::new(Mutex::new(None));
     let document_data = document_store.clone();
-    // let save_p = save_path.clone();
 
     let html_thread = thread::spawn(move || {
       for msg in html_recevier {
         let document = html::parse(msg);
-        style_local_sender.send(document).unwrap();
+        style_sender.send(document).unwrap();
       }
     });
 
@@ -67,23 +65,26 @@ impl PageThread {
         *document_ref = Some(document);
         if document_ref.is_some() {
           let document = document_ref.take().unwrap(); // Option的take方法可以直接拿走Some数据：https://stackoverflow.com/questions/30573188/cannot-move-data-out-of-a-mutex
-          let style_tree = style::get_style_tree(document);
-          println!("{:?}", style_tree);
-          layout_sender.send((style_tree, viewport));
+          let style_tree = style::StyleTree {
+            document
+          };
+          layout_sender.send(style_tree).unwrap();
         }
       }
     });
 
     let layout_thread = thread::spawn(move || {
-      for (style_tree, init_box) in layout_recevier {
-        let layout_tree = layout::get_layout_tree(style_tree, init_box);
-        raster_local_sender.send(layout_tree).unwrap();
+      for style_tree in layout_recevier {
+        let layout_tree = LayoutTree {
+          style_tree
+        };
+        raster_sender.send(layout_tree).unwrap();
       }
     });
 
     let raster_thread = thread::spawn(move || {
       for layout_tree in raster_recevier {
-        let painting_res = raster::raster(&layout_tree);
+        let painting_res = raster::raster(&layout_tree.get_layout_tree(viewport));
         painting_res.save(&save_path);
       }
     });

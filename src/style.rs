@@ -29,6 +29,10 @@ pub struct StyledNode<'a> {
   pub parent: Option<Weak<StyledNode<'a>>> // 使用week可以有效避免Rc指针的循环引用（https://course.rs/advance/circle-self-ref/circle-reference.html#%E4%BD%BF%E7%94%A8-weak-%E8%A7%A3%E5%86%B3%E5%BE%AA%E7%8E%AF%E5%BC%95%E7%94%A8）
 }
 
+pub struct StyleTree {
+  pub document: Document,
+}
+
 #[derive(Debug)]
 pub enum Display {
   Inline,
@@ -179,7 +183,10 @@ fn style_tree<'a>(root: &'a Node, stylesheets: &'a Vec<Stylesheet>, parent: Opti
   styled_node
 }
 
-/// 根据文档对象生成对应的`style tree`
-pub fn get_style_tree<'a>(document: Document) -> Arc<StyledNode<'a>> {
-  style_tree(&document.root, &document.stylesheets, None) // FIXME: 这里数据的所有权怎么处理？
+impl StyleTree {
+  /// 根据文档对象生成对应的`style tree`
+  pub fn get_style_tree<'a>(&'a self) -> Arc<StyledNode<'a>> {
+    // FIXME: 这里数据的所有权怎么处理？
+    style_tree(&self.document.root, &self.document.stylesheets, None)
+  }
 }

@@ -28,7 +28,8 @@ pub struct PageThread {
   html_thread: JoinHandle<()>,
   style_thread: JoinHandle<()>,
   layout_thread: JoinHandle<()>,
-  raster_thread: JoinHandle<()>
+  raster_thread: JoinHandle<()>,
+  pub raster_window: Arc<Mutex<raster::RasterWindow>>
 }
 
 // impl<T> ThreadInfo<T> {
@@ -39,7 +40,7 @@ pub struct PageThread {
 // }
 
 impl PageThread {
-  pub fn new(viewport: layout::Box, save_path: String) -> Self {
+  pub fn new(viewport: layout::Box, id: String) -> Self {
     let (html_sender, html_recevier) = mpsc::channel::<String>();
     let (style_sender, style_recevier) = mpsc::channel::<Document>();
     let (layout_sender, layout_recevier) = mpsc::channel::<StyleTree>();
@@ -48,6 +49,8 @@ impl PageThread {
     // let raster_local_sender = raster_sender.clone();
     let document_store: Arc<Mutex<Option<Document>>> = Arc::new(Mutex::new(None));
     let document_data = document_store.clone();
+    let raster_window = Arc::new(Mutex::new(raster::RasterWindow::new(id)));
+    let raster_window_store = raster_window.clone();
 
     let html_thread = thread::spawn(move || {
       for msg in html_recevier {
@@ -84,8 +87,9 @@ impl PageThread {
 
     let raster_thread = thread::spawn(move || {
       for layout_tree in raster_recevier {
-        let painting_res = raster::raster(&layout_tree.get_layout_tree(viewport));
-        painting_res.save(&save_path);
+        let mut raster_window_ref = raster_window_store.lock().unwrap();
+        raster_window_ref.raster(&layout_tree.get_layout_tree(viewport));
+        drop(raster_window_ref);
       }
     });
 
@@ -94,7 +98,8 @@ impl PageThread {
       html_thread,
       style_thread,
       layout_thread,
-      raster_thread
+      raster_thread,
+      raster_window
     }
   }
 

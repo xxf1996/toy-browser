@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use crate::css::{
   CSSColor,
   CSSValue
@@ -9,9 +11,16 @@ use crate::layout::{
   get_text_layout
 };
 use fontdue::layout::GlyphPosition;
+use ggez::event::EventHandler;
 use image::{
   RgbaImage,
   Rgba
+};
+use ggez::{
+  event,
+  glam::*,
+  graphics::{self, Color},
+  Context, GameResult,
 };
 
 static DEFAULT_FONT_COLOR: CSSColor = CSSColor {
@@ -19,6 +28,13 @@ static DEFAULT_FONT_COLOR: CSSColor = CSSColor {
   g: 0,
   b: 0,
   a: 255
+};
+
+static TRANSPARENT: CSSColor = CSSColor {
+  r: 0,
+  g: 0,
+  b: 0,
+  a: 0
 };
 
 #[derive(Debug)]
@@ -42,6 +58,50 @@ pub struct Canvas {
   height: usize,
   /// 像素列表，按行排列
   pixels: Vec<CSSColor>,
+}
+
+struct WindowState {
+  image_canvas: Arc<Mutex<Canvas>>
+}
+
+pub struct RasterWindow {
+  id: String,
+  pub canvas: Arc<Mutex<Canvas>>
+}
+
+impl event::EventHandler<ggez::GameError> for WindowState {
+  fn update(&mut self, _ctx: &mut Context) -> GameResult {
+    Ok(())
+  }
+
+  fn draw(&mut self, ctx: &mut Context) -> GameResult {
+    let img = self.image_canvas.lock().unwrap();
+    let img_data = img.to_image(ctx);
+    // 这里Image::from_pixels方法生成的图像并不能直接应用到Canvas::from_image中！https://docs.rs/ggez/latest/ggez/graphics/struct.Canvas.html#method.from_image
+    let mut canvas = graphics::Canvas::from_frame(ctx, Color::WHITE);
+    let param = graphics::DrawParam::new();
+    // let canvas = graphics::Canvas::from_image(ctx, img.to_image(ctx), Color::WHITE);
+    // 但是draw方法则可以直接绘制Image结构
+    canvas.draw(&img_data, param);
+    canvas.finish(ctx)?;
+    Ok(())
+  }
+}
+
+impl RasterWindow {
+  pub fn new(id: String) -> Self {
+    let canvas = Arc::new(Mutex::new(Canvas::new(1280, 720)));
+    Self { id, canvas }
+  }
+
+  pub fn raster(&mut self, layout_tree: &LayoutBox) -> () {
+    let init_box = layout_tree.box_model.margin_box();
+    let mut canvas = self.canvas.lock().unwrap();
+    *canvas = Canvas::new(init_box.width as usize, init_box.height as usize);
+    let display_list = get_display_list(layout_tree);
+    // println!("{:#?}", layout_tree.box_model);
+    draw_commands(&display_list, &mut canvas);
+  }
 }
 
 impl Canvas {
@@ -110,18 +170,25 @@ impl Canvas {
     }
   }
 
+  pub fn to_image(&self, ctx: &Context) -> graphics::Image {
+    let mut pixels: Vec<u8> = vec![];
+    // NOTICE: Image的像素排列是列优先的……因此需要从上往下再从左往左扫描像素！！！
+    for y in 0..self.height {
+      for x in 0..self.width {
+        let pixel = self.pixels.get(y * self.width + x).unwrap_or(&TRANSPARENT);
+        pixels.extend_from_slice(&pixel.to_vec());
+      }
+    }
+    // NOTICE: 这里绘制的像素必须转换为浮点数[0, 1]（Rgba8UnormSrgb格式会自动将u8转为0到1的浮点数），不然会报错！
+    graphics::Image::from_pixels(ctx, pixels.as_slice(), graphics::ImageFormat::Rgba8UnormSrgb, self.width as u32, self.height as u32)
+  }
+
   /// 将当前渲染结果保存为图片
   pub fn save(&self, path: &str) {
     let mut img = RgbaImage::new(self.width as u32, self.height as u32);
-    let transparent = CSSColor {
-      r: 0,
-      g: 0,
-      b: 0,
-      a: 0
-    };
     for x in 0..self.width {
       for y in 0..self.height {
-        let pixel = self.pixels.get(y * self.width + x).unwrap_or(&transparent);
+        let pixel = self.pixels.get(y * self.width + x).unwrap_or(&TRANSPARENT);
         let color = Rgba([pixel.r, pixel.g, pixel.b, pixel.a]);
         img.put_pixel(x as u32, y as u32, color);
       }
@@ -163,16 +230,10 @@ fn get_color(layout_box: &LayoutBox, color_name: &str) -> Option<CSSColor> {
 
 /// 绘制边框图形区域
 fn draw_border(layout_box: &LayoutBox, display_list: &mut Vec<DisplayCommand>) {
-  let transparent = CSSColor {
-    r: 0,
-    g: 0,
-    b: 0,
-    a: 0
-  };
   let mut draw_one_border = |name: &str, rect: RectArea| {
     let color = get_color(layout_box, name)
-      .unwrap_or(get_color(layout_box, "border-color").unwrap_or(transparent.clone()));
-    if color != transparent {
+      .unwrap_or(get_color(layout_box, "border-color").unwrap_or(TRANSPARENT.clone()));
+    if color != TRANSPARENT {
       display_list.push(DisplayCommand::Rectangle(color, rect))
     }
   };
@@ -253,3 +314,18 @@ pub fn raster(layout_tree: &LayoutBox) -> Canvas {
   canvas
 }
 
+/// 启动一个窗口，需要注意的是event::run方法必须要在主线程执行（因为`event loop`的限制）
+/// 
+/// 启动窗口后该方法会**阻塞主线程**！
+pub fn start_window(window_store: Arc<Mutex<RasterWindow>>) -> GameResult {
+  let window = window_store.lock().unwrap();
+  let cb = ggez::ContextBuilder::new(window.id.as_str(), "xxf");
+  let (mut ctx, event_loop) = cb.build().unwrap();
+  let state = WindowState {
+    image_canvas: window.canvas.clone()
+  };
+  ctx.gfx.set_window_title(window.id.as_str());
+  ctx.gfx.set_drawable_size(1280.0, 480.0).unwrap();
+  drop(window);
+  event::run(ctx, event_loop, state)
+}

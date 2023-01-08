@@ -1,0 +1,267 @@
+{
+  // 使用 IntelliSense 了解相关属性。 
+  // 悬停以查看现有属性的描述。
+  // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'toy-browser'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=toy-browser",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "toy-browser",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'toy-browser'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=toy-browser",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "toy-browser",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'boa-run'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=boa-run",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "boa-run",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'boa-run'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=boa-run",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "boa-run",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'boa-class-test'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=boa-class-test",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "boa-class-test",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'boa-class-test'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=boa-class-test",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "boa-class-test",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'boa-object-test'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=boa-object-test",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "boa-object-test",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'boa-object-test'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=boa-object-test",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "boa-object-test",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'boa-classes'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=boa-classes",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "boa-classes",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'boa-classes'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=boa-classes",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "boa-classes",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'layout-test'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=layout-test",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "layout-test",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'layout-test'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=layout-test",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "layout-test",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'render-test'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=render-test",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "render-test",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'render-test'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=render-test",
+          "--package=toy-browser"
+        ],
+        "filter": {
+          "name": "render-test",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

@@ -61,6 +61,12 @@ impl Index<usize> for CSSColor {
   }
 }
 
+impl CSSColor {
+  pub fn to_vec(&self) -> [u8; 4] {
+    [self.r, self.g, self.b, self.a]
+  }
+}
+
 /// `CSS`键值对
 #[derive(Debug)]
 pub struct CSSPropValue {

@@ -5,121 +5,55 @@ mod style;
 mod layout;
 mod raster;
 mod font;
-use dom::{
-  Node,
-  text,
-  element,
-  comment,
-};
-use std::collections::HashMap;
+mod thread;
 // use std::io::Read; // 使用read_to_string方法必须引入这个
 // use std::fs::File;
 use std::fs;
 use std::io::Error;
 use std::path::PathBuf;
-
-fn dom_test() {
-  let mut children: Vec<Node> = vec!();
-  children.push(element(String::from("p"), HashMap::new(), vec!()));
-  children.push(comment(String::from("<!-- swe -->")));
-  children.push(text(String::from("content")));
-  let document = element(String::from("div"), HashMap::new(), children);
-  println!("{:#?}", document);
-}
-
-fn html_test() -> Result<(), Error> {
-  let source = String::from("<html><body xxx=\"123\">hello parser</body></html>");
-  let res = html::parse(source);
-  println!("{:#?}", res);
-  // let project_root = env!("CARGO_MANIFEST_DIR");
-  // println!("{}", project_root);
-  // CARGO_MANIFEST_DIR是内置的环境：项目根目录路径
-  let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-  file_path.push("src");
-  file_path.push("demo");
-  file_path.push("source.html");
-  let file_path_url = file_path.to_str().unwrap_or("");
-  println!("{}", file_path_url);
-  let content = fs::read_to_string(file_path_url)?;
-  println!("{:#?}", html::parse(content));
-  Ok(())
-}
-
-fn css_test() -> Result<(), Error> {
-  let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-  file_path.push("src");
-  file_path.push("demo");
-  file_path.push("source.css");
-  let file_path_url = file_path.to_str().unwrap_or("");
-  println!("{}", file_path_url);
-  let content = fs::read_to_string(file_path_url)?;
-  let stylesheet = css::parse(content);
-  println!("{:#?}", stylesheet);
-  for rule in &stylesheet.rules {
-    for selector in &rule.selectors {
-      println!("{:#?}", selector);
-      println!("{:?}", selector.get_specificity());
-    }
-  }
-  Ok(())
-}
-
-fn style_tree_test() -> Result<(), Error> {
-  let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-  file_path.push("src");
-  file_path.push("demo");
-  file_path.push("source.html");
-  let file_path_url = file_path.to_str().unwrap_or("");
-  println!("{}", file_path_url);
-  let content = fs::read_to_string(file_path_url)?;
-  let document = html::parse(content);
-  let style_tree = style::get_style_tree(&document);
-  println!("{:#?}", style_tree);
-  Ok(())
-}
-
-fn layout_tree_test() -> Result<(), Error> {
-  let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-  file_path.push("src");
-  file_path.push("demo");
-  file_path.push("source.html");
-  let file_path_url = file_path.to_str().unwrap_or("");
-  println!("{}", file_path_url);
-  let content = fs::read_to_string(file_path_url)?;
-  let document = html::parse(content);
-  let style_tree = style::get_style_tree(&document);
-  // 模拟视窗
-  let mut viewport = layout::Box::default();
-  viewport.content.width = 1280.0;
-  let layout_tree = layout::get_layout_tree(style_tree, viewport);
-  println!("{:#?}", layout_tree);
-  Ok(())
-}
+use std::time::{Duration};
+use regex::Regex;
+use tokio::runtime::Runtime;
+use tokio::time::{self, Instant};
 
 fn painting_test() -> Result<(), Error> {
   let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   file_path.push("src/demo/text-test.html");
   let file_path_url = file_path.to_str().unwrap_or("");
   println!("{}", file_path_url);
-  let content = fs::read_to_string(file_path_url)?;
-  let document = html::parse(content);
-  let style_tree = style::get_style_tree(&document);
+  let mut content = fs::read_to_string(file_path_url).unwrap();
   // 模拟视窗
   let mut viewport = layout::Box::default();
   viewport.content.width = 1280.0;
-  let layout_tree = layout::get_layout_tree(style_tree, viewport);
-  let painting_res = raster::raster(&layout_tree);
   let mut save_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   save_path.push("result.png");
-  painting_res.save(save_path.to_str().unwrap_or(""));
+  let page_thread = thread::PageThread::new(viewport, String::from("test window"));
+  let content_reg = Regex::new(r"(there:)\{.+\}").unwrap(); // FIXME: regex真的不支持中文字符匹配？
+  let window_store = page_thread.raster_window.clone();
+  let tab = std::thread::spawn(move || {
+    let rt = Runtime::new().unwrap();
+    rt.block_on(async {
+      page_thread.html_sender.send(content.clone()).unwrap();
+      let start = Instant::now() + Duration::from_secs(3);
+      let interval = Duration::from_micros(500);
+      let mut intv = time::interval_at(start, interval);
+      // TODO: 如何让定时器自动触发？循环？https://rust-book.junmajinlong.com/ch100/03_use_tokio_time.html#%E9%97%B4%E9%9A%94%E4%BB%BB%E5%8A%A1-tokiotimeinterval
+      let mut num: usize = 1;
+      // let start_t = Instant::now();
+      loop {
+        intv.tick().await;
+        content = content_reg.replace(content.as_str(), format!("$1{{{}}}", num)).to_string();
+        page_thread.html_sender.send(content.clone()).unwrap();
+        num += 1;
+      }
+    });
+    page_thread.join().unwrap();
+  });
+  raster::start_window(window_store).unwrap();
+  tab.join().unwrap(); // TODO: 多线程性能测试
   Ok(())
 }
 
 fn main() {
-  // dom_test();
-  // html_test();
-  // css_test();
-  // style_tree_test();
-  // layout_tree_test();
   painting_test().unwrap();
 }

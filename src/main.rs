@@ -34,19 +34,18 @@ fn painting_test() -> Result<(), Error> {
     let rt = Runtime::new().unwrap();
     rt.block_on(async {
       page_thread.html_sender.send(content.clone()).unwrap();
-      let start = Instant::now() + Duration::from_secs(10);
-      let interval = Duration::from_secs(5);
+      let start = Instant::now() + Duration::from_secs(3);
+      let interval = Duration::from_micros(500);
       let mut intv = time::interval_at(start, interval);
       // TODO: 如何让定时器自动触发？循环？https://rust-book.junmajinlong.com/ch100/03_use_tokio_time.html#%E9%97%B4%E9%9A%94%E4%BB%BB%E5%8A%A1-tokiotimeinterval
-      intv.tick().await;
-      content = content_reg.replace(content.as_str(), format!("$1{{{}}}", 1)).to_string();
-      page_thread.html_sender.send(content.clone()).unwrap();
-      intv.tick().await;
-      content = content_reg.replace(content.as_str(), format!("$1{{{}}}", 2)).to_string();
-      page_thread.html_sender.send(content.clone()).unwrap();
-      intv.tick().await;
-      content = content_reg.replace(content.as_str(), format!("$1{{{}}}", 3)).to_string();
-      page_thread.html_sender.send(content.clone()).unwrap();
+      let mut num: usize = 1;
+      // let start_t = Instant::now();
+      loop {
+        intv.tick().await;
+        content = content_reg.replace(content.as_str(), format!("$1{{{}}}", num)).to_string();
+        page_thread.html_sender.send(content.clone()).unwrap();
+        num += 1;
+      }
     });
     page_thread.join().unwrap();
   });

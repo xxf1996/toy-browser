@@ -12,6 +12,7 @@ use crate::layout::{
 };
 use fontdue::layout::GlyphPosition;
 use ggez::event::EventHandler;
+use ggez::mint::Vector2;
 use image::{
   RgbaImage,
   Rgba
@@ -61,7 +62,9 @@ pub struct Canvas {
 }
 
 struct WindowState {
-  image_canvas: Arc<Mutex<Canvas>>
+  image_canvas: Arc<Mutex<Canvas>>,
+  /// device pixel ratio
+  dpr: f32
 }
 
 pub struct RasterWindow {
@@ -79,7 +82,14 @@ impl event::EventHandler<ggez::GameError> for WindowState {
     let img_data = img.to_image(ctx);
     // 这里Image::from_pixels方法生成的图像并不能直接应用到Canvas::from_image中！https://docs.rs/ggez/latest/ggez/graphics/struct.Canvas.html#method.from_image
     let mut canvas = graphics::Canvas::from_frame(ctx, Color::WHITE);
-    let param = graphics::DrawParam::new();
+    let param = graphics::DrawParam::new()
+      .dest(Vector2 {
+        x: 0.0,
+        y: 0.0
+      }).scale(Vector2 {
+        x: self.dpr,
+        y: self.dpr
+      });
     // let canvas = graphics::Canvas::from_image(ctx, img.to_image(ctx), Color::WHITE);
     // 但是draw方法则可以直接绘制Image结构
     canvas.draw(&img_data, param);
@@ -321,11 +331,13 @@ pub fn start_window(window_store: Arc<Mutex<RasterWindow>>) -> GameResult {
   let window = window_store.lock().unwrap();
   let cb = ggez::ContextBuilder::new(window.id.as_str(), "xxf");
   let (mut ctx, event_loop) = cb.build().unwrap();
+  let dpr = ctx.gfx.window().scale_factor() as f32;
   let state = WindowState {
-    image_canvas: window.canvas.clone()
+    image_canvas: window.canvas.clone(),
+    dpr
   };
   ctx.gfx.set_window_title(window.id.as_str());
-  ctx.gfx.set_drawable_size(1280.0, 480.0).unwrap();
+  ctx.gfx.set_drawable_size(1280.0 * dpr, 480.0 * dpr).unwrap();
   drop(window);
   event::run(ctx, event_loop, state)
 }

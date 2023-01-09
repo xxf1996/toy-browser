@@ -1,6 +1,7 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use fontdue::layout::{TextStyle, GlyphPosition, LayoutSettings};
+use ggez::graphics;
 
 use crate::dom::NodeType;
 use crate::font::TextLayout;
@@ -69,7 +70,7 @@ pub struct LayoutBox<'a> {
   pub box_model: Box,
   pub box_type: BoxType<'a>,
   pub children: Vec<LayoutBox<'a>>,
-  pub glyphs: Vec<GlyphPosition>,
+  pub glyphs: Arc<Mutex<Vec<GlyphPosition>>>,
 }
 
 pub struct LayoutTree {
@@ -107,6 +108,10 @@ impl RectArea {
       height: self.height + edge.top + edge.bottom,
     }
   }
+
+  pub fn to_ggez_rect(&self) -> graphics::Rect {
+    graphics::Rect::new(self.x, self.y, self.width, self.height)
+  }
 }
 
 impl Box {
@@ -142,7 +147,7 @@ impl<'a> LayoutBox<'a> {
       box_model: Box::default(),
       box_type,
       children: vec![],
-      glyphs: vec![]
+      glyphs: Arc::new(Mutex::new(vec![]))
     }
   }
 
@@ -381,8 +386,10 @@ impl<'a> LayoutBox<'a> {
           let text_layout = get_text_layout();
           cur_child.box_model.content.width = w;
           cur_child.box_model.content.height = h; // 设置行高
-          cur_child.glyphs = text_layout.layout.glyphs().clone(); // TODO: 不知道这里能不能引用，主要是担心clear操作会清空
+          let mut glyphs = cur_child.glyphs.lock().unwrap();
+          *glyphs = text_layout.layout.glyphs().clone(); // TODO: 不知道这里能不能引用，主要是担心clear操作会清空
           let mut last_line: Option<&mut LayoutBox> = None;
+          drop(glyphs);
 
           for child in line_and_children.iter_mut() {
             if let BoxType::Line = child.box_type {

@@ -1,5 +1,7 @@
 use std::ops::Index;
 
+use ggez::graphics;
+
 struct Parser {
   /// 源码字符串
   input: String,
@@ -64,6 +66,10 @@ impl Index<usize> for CSSColor {
 impl CSSColor {
   pub fn to_vec(&self) -> [u8; 4] {
     [self.r, self.g, self.b, self.a]
+  }
+
+  pub fn to_ggez_color(&self) -> graphics::Color {
+    graphics::Color::from_rgba(self.r, self.g, self.b, self.a)
   }
 }
 

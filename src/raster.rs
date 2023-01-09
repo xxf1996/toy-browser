@@ -39,16 +39,16 @@ static TRANSPARENT: CSSColor = CSSColor {
 };
 
 #[derive(Debug)]
-struct TextRenderInfo<'a> {
+struct TextRenderInfo {
   color: CSSColor,
   area: RectArea,
-  glyphs: &'a Vec<GlyphPosition>
+  glyphs: Arc<Mutex<Vec<GlyphPosition>>>
 }
 
 #[derive(Debug)]
-enum DisplayCommand<'a> {
+pub enum DisplayCommand {
   Rectangle(CSSColor, RectArea),
-  Text(TextRenderInfo<'a>)
+  Text(TextRenderInfo)
 }
 
 /// 二维画布
@@ -62,14 +62,42 @@ pub struct Canvas {
 }
 
 struct WindowState {
-  image_canvas: Arc<Mutex<Canvas>>,
+  display_commands: Arc<Mutex<Vec<DisplayCommand>>>,
   /// device pixel ratio
   dpr: f32
 }
 
 pub struct RasterWindow {
   id: String,
-  pub canvas: Arc<Mutex<Canvas>>
+  pub display_commands: Arc<Mutex<Vec<DisplayCommand>>>
+}
+
+impl WindowState {
+  fn draw_commands(&self, ctx: &mut Context, canvas: &mut graphics::Canvas) {
+    let display_list = self.display_commands.lock().unwrap();
+    for command in &*display_list {
+      match command {
+        DisplayCommand::Rectangle(color, rect) => {
+          let mut mb = graphics::MeshBuilder::new();
+          let mut ggez_rect = rect.to_ggez_rect();
+          // 考虑到dpr，所以需要的矩形区域进行相应的放大，且起点也要偏移
+          ggez_rect.x *= self.dpr;
+          ggez_rect.y *= self.dpr;
+          ggez_rect.scale(self.dpr, self.dpr);
+          mb.rectangle(graphics::DrawMode::fill(), ggez_rect, color.to_ggez_color()).unwrap();
+          let mesh = graphics::Mesh::from_data(ctx, mb.build());
+          let draw_param = graphics::DrawParam::new();
+          canvas.draw(&mesh, draw_param);
+        },
+        DisplayCommand::Text(_info) => {
+          // TODO: 要么跟之前类似把以前的字体光栅化信息直接写入到纹理（图像像素），要么基于ggez自带的text系统重写从字体布局开始写一遍……
+        },
+        // _ => {
+        //   // TODO: 其它绘制操作
+        // }
+      }
+    }
+  }
 }
 
 impl event::EventHandler<ggez::GameError> for WindowState {
@@ -78,21 +106,8 @@ impl event::EventHandler<ggez::GameError> for WindowState {
   }
 
   fn draw(&mut self, ctx: &mut Context) -> GameResult {
-    let img = self.image_canvas.lock().unwrap();
-    let img_data = img.to_image(ctx);
-    // 这里Image::from_pixels方法生成的图像并不能直接应用到Canvas::from_image中！https://docs.rs/ggez/latest/ggez/graphics/struct.Canvas.html#method.from_image
     let mut canvas = graphics::Canvas::from_frame(ctx, Color::WHITE);
-    let param = graphics::DrawParam::new()
-      .dest(Vector2 {
-        x: 0.0,
-        y: 0.0
-      }).scale(Vector2 {
-        x: self.dpr,
-        y: self.dpr
-      });
-    // let canvas = graphics::Canvas::from_image(ctx, img.to_image(ctx), Color::WHITE);
-    // 但是draw方法则可以直接绘制Image结构
-    canvas.draw(&img_data, param);
+    self.draw_commands(ctx, &mut canvas);
     canvas.finish(ctx)?;
     Ok(())
   }
@@ -100,17 +115,14 @@ impl event::EventHandler<ggez::GameError> for WindowState {
 
 impl RasterWindow {
   pub fn new(id: String) -> Self {
-    let canvas = Arc::new(Mutex::new(Canvas::new(1280, 720)));
-    Self { id, canvas }
+    let display_commands: Arc<Mutex<Vec<DisplayCommand>>> = Arc::new(Mutex::new(Vec::new()));
+    Self { id, display_commands }
   }
 
-  pub fn raster(&mut self, layout_tree: &LayoutBox) -> () {
+  pub fn raster(&mut self, layout_tree: &LayoutBox) {
     let init_box = layout_tree.box_model.margin_box();
-    let mut canvas = self.canvas.lock().unwrap();
-    *canvas = Canvas::new(init_box.width as usize, init_box.height as usize);
-    let display_list = get_display_list(layout_tree);
-    // println!("{:#?}", layout_tree.box_model);
-    draw_commands(&display_list, &mut canvas);
+    let mut display_list = self.display_commands.lock().unwrap();
+    *display_list = get_display_list(layout_tree);
   }
 }
 
@@ -161,8 +173,9 @@ impl Canvas {
     let text_layout = get_text_layout();
     let origin_x = render_info.area.x;
     let origin_y = render_info.area.y;
+    let glyphs = render_info.glyphs.lock().unwrap();
 
-    for glyph in render_info.glyphs {
+    for glyph in &*glyphs {
       let (_, bitmap) = text_layout.fonts[glyph.font_index].rasterize_config(glyph.key);
       for (idx, mask) in bitmap.iter().enumerate() {
         if glyph.width == 0 || glyph.height == 0 {
@@ -209,14 +222,14 @@ impl Canvas {
 }
 
 /// 获取布局树的`display list`（绘制命令列表）
-fn get_display_list<'a>(layout_tree: &'a LayoutBox) -> Vec<DisplayCommand<'a>> {
+fn get_display_list<'a>(layout_tree: &'a LayoutBox) -> Vec<DisplayCommand> {
   let mut display_list: Vec<DisplayCommand> = vec!();
   get_display_command(layout_tree, &mut display_list);
   display_list
 }
 
 /// 获取单个布局结点的`display list`
-fn get_display_command<'a, 'b>(layout_box: &'a LayoutBox, display_list: &'b mut Vec<DisplayCommand<'a>>) {
+fn get_display_command<'a, 'b>(layout_box: &'a LayoutBox, display_list: &'b mut Vec<DisplayCommand>) {
   draw_border(layout_box, display_list);
   draw_background(layout_box, display_list);
   draw_content(layout_box, display_list);
@@ -283,14 +296,14 @@ fn draw_background(layout_box: &LayoutBox, display_list: &mut Vec<DisplayCommand
 }
 
 /// 绘制纯文本内容
-fn draw_content<'a, 'b>(layout_box: &'a LayoutBox, display_list: &'b mut Vec<DisplayCommand<'a>>) {
+fn draw_content<'a, 'b>(layout_box: &'a LayoutBox, display_list: &'b mut Vec<DisplayCommand>) {
   match layout_box.box_type {
     BoxType::AnonymousInline(..) => {
       let color = get_color(layout_box, "color").unwrap_or(DEFAULT_FONT_COLOR);
       display_list.push(DisplayCommand::Text(TextRenderInfo {
         color,
         area: layout_box.box_model.content,
-        glyphs: &layout_box.glyphs
+        glyphs: layout_box.glyphs.clone()
       }))
     },
     _ => {}
@@ -324,7 +337,7 @@ pub fn raster(layout_tree: &LayoutBox) -> Canvas {
   canvas
 }
 
-/// 启动一个窗口，需要注意的是event::run方法必须要在主线程执行（因为`event loop`的限制）
+/// 启动一个窗口，需要注意的是event::run方法**必须要在主线程**执行（因为`event loop`的限制）
 /// 
 /// 启动窗口后该方法会**阻塞主线程**！
 pub fn start_window(window_store: Arc<Mutex<RasterWindow>>) -> GameResult {
@@ -333,7 +346,7 @@ pub fn start_window(window_store: Arc<Mutex<RasterWindow>>) -> GameResult {
   let (mut ctx, event_loop) = cb.build().unwrap();
   let dpr = ctx.gfx.window().scale_factor() as f32;
   let state = WindowState {
-    image_canvas: window.canvas.clone(),
+    display_commands: window.display_commands.clone(),
     dpr
   };
   ctx.gfx.set_window_title(window.id.as_str());

@@ -1,24 +1,12 @@
 use std::any::Any;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
 
 use crate::dom::{Document};
 use crate::{html, style, layout, raster};
-use crate::layout::{LayoutBox, LayoutTree};
-use crate::style::{StyledNode, StyleTree};
-
-enum ThreadInput<'a> {
-  Html(String),
-  Style(&'a Document),
-  Layout(Arc<StyledNode<'a>>, layout::Box),
-  Raster(&'a LayoutBox<'a>)
-}
-
-struct ThreadInfo<T> {
-  sender: Sender<T>,
-  receiver: Receiver<T>
-}
+use crate::layout::{LayoutTree};
+use crate::style::{StyleTree};
 
 pub struct PageThread {
   pub html_sender: Sender<String>,

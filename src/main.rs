@@ -50,7 +50,7 @@ fn painting_test() -> Result<(), Error> {
     page_thread.join().unwrap();
   });
   raster::start_window(window_store).unwrap();
-  tab.join().unwrap(); // TODO: 多线程性能测试
+  tab.join().unwrap(); // TODO: 多线程性能测试（包括运行内存增长情况，是否有内存泄漏？）
   Ok(())
 }
 

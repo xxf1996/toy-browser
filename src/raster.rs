@@ -11,12 +11,7 @@ use crate::layout::{
   get_text_layout
 };
 use fontdue::layout::GlyphPosition;
-use ggez::event::EventHandler;
 use ggez::mint::Vector2;
-use image::{
-  RgbaImage,
-  Rgba
-};
 use ggez::{
   event,
   glam::*,
@@ -38,41 +33,80 @@ static TRANSPARENT: CSSColor = CSSColor {
   a: 0
 };
 
+/// 文本渲染信息
 #[derive(Debug)]
-struct TextRenderInfo {
+pub struct TextRenderInfo {
+  /// 文本颜色
   color: CSSColor,
+  /// 文本占据的矩形区域
   area: RectArea,
+  /// 文本光栅化后的字符信息
   glyphs: Arc<Mutex<Vec<GlyphPosition>>>
 }
 
+/// 绘制命令
 #[derive(Debug)]
 pub enum DisplayCommand {
+  /// 单纯矩形区域色块
   Rectangle(CSSColor, RectArea),
+  /// 文本
   Text(TextRenderInfo)
 }
 
-/// 二维画布
-pub struct Canvas {
-  /// 宽度（像素）
-  width: usize,
-  /// 高度
-  height: usize,
-  /// 像素列表，按行排列
-  pixels: Vec<CSSColor>,
-}
-
+/// ggez绘制状态信息
 struct WindowState {
   display_commands: Arc<Mutex<Vec<DisplayCommand>>>,
   /// device pixel ratio
   dpr: f32
 }
 
+/// 光栅化输出窗口
 pub struct RasterWindow {
+  /// 窗口id，也是标题
   id: String,
   pub display_commands: Arc<Mutex<Vec<DisplayCommand>>>
 }
 
+impl TextRenderInfo {
+  /// 将当前文本光栅化信息转为ggez image，方便绘制
+  fn to_image(&self, ctx: &Context) -> graphics::Image {
+    let w = self.area.width as usize;
+    let h = self.area.height as usize;
+    let text_layout = get_text_layout();
+    let glyphs = self.glyphs.lock().unwrap();
+    let pixel_num = w * h * 4;
+    let mut pixels: Vec<u8> = vec![0; pixel_num];
+    let font_color = self.color;
+
+    // 逐字符填充光栅化信息
+    for glyph in &*glyphs {
+      let (_, bitmap) = text_layout.fonts[glyph.font_index].rasterize_config(glyph.key);
+      for (idx, mask) in bitmap.iter().enumerate() {
+        if glyph.width == 0 || glyph.height == 0 {
+          continue;
+        }
+        let dx = idx % glyph.width;
+        let dy = (idx as f32 / glyph.width as f32).floor() as usize;
+        let x = glyph.x as usize + dx;
+        let y = glyph.y as usize + dy;
+        if x >= w || y >= h {
+          continue;
+        }
+        let start_idx = (y * w + x) * 4; // NOTICE: 按行优先排列的索引
+        pixels[start_idx] = font_color.r;
+        pixels[start_idx + 1] = font_color.g;
+        pixels[start_idx + 2] = font_color.b;
+        pixels[start_idx + 3] = *mask;
+      }
+    }
+
+    // NOTICE: 这里绘制的像素必须转换为浮点数[0, 1]（Rgba8UnormSrgb格式会自动将u8转为0到1的浮点数），不然会报错！
+    graphics::Image::from_pixels(ctx, pixels.as_slice(), graphics::ImageFormat::Rgba8UnormSrgb, w as u32, h as u32)
+  }
+}
+
 impl WindowState {
+  /// 在ggez画布上绘制命令列表
   fn draw_commands(&self, ctx: &mut Context, canvas: &mut graphics::Canvas) {
     let display_list = self.display_commands.lock().unwrap();
     for command in &*display_list {
@@ -89,12 +123,20 @@ impl WindowState {
           let draw_param = graphics::DrawParam::new();
           canvas.draw(&mesh, draw_param);
         },
-        DisplayCommand::Text(_info) => {
-          // TODO: 要么跟之前类似把以前的字体光栅化信息直接写入到纹理（图像像素），要么基于ggez自带的text系统重写从字体布局开始写一遍……
-        },
-        // _ => {
-        //   // TODO: 其它绘制操作
-        // }
+        DisplayCommand::Text(info) => {
+          // 要么跟之前类似把以前的字体光栅化信息直接写入到纹理（图像像素），要么基于ggez自带的text系统重写从字体布局开始写一遍……
+          let text_image = info.to_image(ctx);
+          let draw_param = graphics::DrawParam::new()
+            .dest(Vector2 {
+              x: info.area.x * self.dpr,
+              y: info.area.y * self.dpr
+            })
+            .scale(Vector2 {
+              x: self.dpr,
+              y: self.dpr
+            }); // TODO: 同理这里也要考虑dpr，不过单纯地使用scale进行放大会使字体看起来很模糊
+          canvas.draw(&text_image, draw_param);
+        }
       }
     }
   }
@@ -120,104 +162,8 @@ impl RasterWindow {
   }
 
   pub fn raster(&mut self, layout_tree: &LayoutBox) {
-    let init_box = layout_tree.box_model.margin_box();
     let mut display_list = self.display_commands.lock().unwrap();
     *display_list = get_display_list(layout_tree);
-  }
-}
-
-impl Canvas {
-  pub fn new(width: usize, height: usize) -> Canvas {
-    let white = CSSColor {
-      r: 255,
-      g: 255,
-      b: 255,
-      a: 255
-    };
-    Canvas {
-      width,
-      height,
-      pixels: std::iter::repeat(white).take(width * height).collect() // 默认填充
-    }
-  }
-
-  /// 在画布中绘制一个填充颜色的矩形
-  fn draw_rect(&mut self, color: CSSColor, rect: RectArea) {
-    let start_x = rect.x.clamp(0.0, self.width as f32) as usize;
-    let end_x = (rect.x + rect.width).clamp(0.0, self.width as f32) as usize;
-    let start_y = rect.y.clamp(0.0, self.height as f32) as usize;
-    let end_y = (rect.y + rect.height).clamp(0.0, self.height as f32) as usize;
-    for x in start_x..end_x {
-      for y in start_y..end_y {
-        self.pixels[y * self.width + x] = color;
-      }
-    }
-  }
-
-  fn set_font_color(&mut self, x: usize, y: usize, font_color: CSSColor, font_mask: u8) {
-    let index = y * self.width + x;
-    let bg_color = self.pixels.get(index).unwrap_or(&CSSColor { r: 0, g: 0, b: 0, a: 0 });
-    let scale = font_mask as f32 / 255.0;
-    // 和底层颜色按照alpha进行混合，字体的mask color实际上就是透明度
-    let single_channel = |idx: usize| (font_color[idx] as f32 * scale + bg_color[idx] as f32 * (1.0 - scale)).round() as u8;
-
-    self.pixels[index] = CSSColor {
-      r: single_channel(0),
-      g: single_channel(1),
-      b: single_channel(2),
-      a: 255
-    }
-  }
-
-  fn draw_text(&mut self, render_info: &TextRenderInfo) {
-    let text_layout = get_text_layout();
-    let origin_x = render_info.area.x;
-    let origin_y = render_info.area.y;
-    let glyphs = render_info.glyphs.lock().unwrap();
-
-    for glyph in &*glyphs {
-      let (_, bitmap) = text_layout.fonts[glyph.font_index].rasterize_config(glyph.key);
-      for (idx, mask) in bitmap.iter().enumerate() {
-        if glyph.width == 0 || glyph.height == 0 {
-          continue;
-        }
-        let dx = idx % glyph.width;
-        let dy = (idx as f32 / glyph.width as f32).floor() as usize;
-        let x = (origin_x + glyph.x) as usize + dx; // 将局部坐标转为基于当前inline box为起点的全局坐标
-        let y = (origin_y + glyph.y) as usize + dy;
-        if x >= self.width || y >= self.height {
-          continue;
-        }
-        self.set_font_color(x, y, render_info.color, *mask);
-      }
-    }
-  }
-
-  pub fn to_image(&self, ctx: &Context) -> graphics::Image {
-    let mut pixels: Vec<u8> = vec![];
-    // NOTICE: Image的像素排列是列优先的……因此需要从上往下再从左往左扫描像素！！！
-    for y in 0..self.height {
-      for x in 0..self.width {
-        let pixel = self.pixels.get(y * self.width + x).unwrap_or(&TRANSPARENT);
-        pixels.extend_from_slice(&pixel.to_vec());
-      }
-    }
-    // NOTICE: 这里绘制的像素必须转换为浮点数[0, 1]（Rgba8UnormSrgb格式会自动将u8转为0到1的浮点数），不然会报错！
-    graphics::Image::from_pixels(ctx, pixels.as_slice(), graphics::ImageFormat::Rgba8UnormSrgb, self.width as u32, self.height as u32)
-  }
-
-  /// 将当前渲染结果保存为图片
-  pub fn save(&self, path: &str) {
-    let mut img = RgbaImage::new(self.width as u32, self.height as u32);
-    for x in 0..self.width {
-      for y in 0..self.height {
-        let pixel = self.pixels.get(y * self.width + x).unwrap_or(&TRANSPARENT);
-        let color = Rgba([pixel.r, pixel.g, pixel.b, pixel.a]);
-        img.put_pixel(x as u32, y as u32, color);
-      }
-    }
-
-    img.save(path).unwrap();
   }
 }
 
@@ -308,33 +254,6 @@ fn draw_content<'a, 'b>(layout_box: &'a LayoutBox, display_list: &'b mut Vec<Dis
     },
     _ => {}
   }
-}
-
-/// 在指定画布上绘制命令列表
-fn draw_commands(display_list: &Vec<DisplayCommand>, canvas: &mut Canvas) {
-  for command in display_list {
-    match command {
-      DisplayCommand::Rectangle(color, rect) => {
-        canvas.draw_rect(*color, *rect);
-      },
-      DisplayCommand::Text(info) => {
-        canvas.draw_text(info);
-      },
-      // _ => {
-      //   // TODO: 其它绘制操作
-      // }
-    }
-  }
-}
-
-/// 对布局树进行光栅化处理
-pub fn raster(layout_tree: &LayoutBox) -> Canvas {
-  let init_box = layout_tree.box_model.margin_box();
-  let mut canvas = Canvas::new(init_box.width as usize, init_box.height as usize);
-  let display_list = get_display_list(layout_tree);
-  // println!("{:#?}", layout_tree.box_model);
-  draw_commands(&display_list, &mut canvas);
-  canvas
 }
 
 /// 启动一个窗口，需要注意的是event::run方法**必须要在主线程**执行（因为`event loop`的限制）

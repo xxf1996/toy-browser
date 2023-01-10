@@ -12,7 +12,6 @@ use crate::css::{
   Stylesheet,
   parse_inline_style,
 };
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{ Arc, Weak, Mutex };
 

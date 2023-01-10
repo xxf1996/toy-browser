@@ -37,7 +37,7 @@ fn painting_test() -> Result<(), Error> {
       let start = Instant::now() + Duration::from_secs(3);
       let interval = Duration::from_millis(50); // 毫秒……
       let mut intv = time::interval_at(start, interval);
-      // TODO: 如何让定时器自动触发？循环？https://rust-book.junmajinlong.com/ch100/03_use_tokio_time.html#%E9%97%B4%E9%9A%94%E4%BB%BB%E5%8A%A1-tokiotimeinterval
+      // 如何让定时器自动触发？循环？https://rust-book.junmajinlong.com/ch100/03_use_tokio_time.html#%E9%97%B4%E9%9A%94%E4%BB%BB%E5%8A%A1-tokiotimeinterval
       let mut num: usize = 1;
       // let start_t = Instant::now();
       loop {
@@ -50,7 +50,7 @@ fn painting_test() -> Result<(), Error> {
     page_thread.join().unwrap();
   });
   raster::start_window(window_store).unwrap();
-  tab.join().unwrap(); // TODO: 多线程性能测试
+  tab.join().unwrap(); // TODO: 多线程性能测试（包括运行内存增长情况，是否有内存泄漏？）
   Ok(())
 }
 

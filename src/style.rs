@@ -185,7 +185,7 @@ fn style_tree<'a>(root: &'a Node, stylesheets: &'a Vec<Stylesheet>, parent: Opti
 impl StyleTree {
   /// 根据文档对象生成对应的`style tree`
   pub fn get_style_tree<'a>(&'a self) -> Arc<StyledNode<'a>> {
-    // FIXME: 这里数据的所有权怎么处理？
+    // 这里数据的所有权怎么处理？ -> 将引用数据转为内部数据
     style_tree(&self.document.root, &self.document.stylesheets, None)
   }
 }

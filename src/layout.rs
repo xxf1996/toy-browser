@@ -159,8 +159,9 @@ impl<'a> LayoutBox<'a> {
     match &self.box_type {
       BoxType::Inline(_) | BoxType::AnonymousBlock(_) => self,
       BoxType::Block(style_node) => {
-        // TODO: 上一个元素如果正好是匿名块级box则无需再新建，直接共用？标准里好像没见到……
-        // 按理说，如果自身是block box，且子级正好是非匿名的inline box还有必要借用匿名block box吗？
+        // 上一个元素如果正好是匿名块级box则无需再新建，直接共用？标准里好像没见到…… →（连续的inline节点共用一个匿名block box）
+        // 按理说，如果自身是block box，且子级正好是非匿名的inline box还有必要借用匿名block box吗？→（按照规范，确实需要）
+        // NOTICE: 事实上这里的逻辑就是判断上一个节点是否为匿名block box，不是则新建一个匿名block box；这里的匿名block box就是inline box的容器。
         if let Some(&LayoutBox { box_type: BoxType::AnonymousBlock(_), .. }) = self.children.last() {
           //
         } else {
@@ -468,7 +469,7 @@ impl<'a> LayoutBox<'a> {
     (last_text.x + (last_text.width as f32), text_layout.layout.height())
   }
 
-  /// 计算line box的布局信息
+  /// 计算`line box`的布局信息
   fn calc_line_box_layout(&mut self, containing_block: Box) {
     let max_h = self.children.iter().map(|child| child.box_model.content.height).max_by(|a, b| a.total_cmp(b)).unwrap();
     self.box_model.content.x = containing_block.content.x;
@@ -482,6 +483,7 @@ impl<'a> LayoutBox<'a> {
     }
   }
 
+  /// 计算渲染需要的布局，会对初始的`box tree`进行结构调整
   fn calc_layout(&mut self, containing_block: Box) {
     // 这里的包含块有可能是匿名块级box，实际上计算百分比属性时不应该用匿名块级box作为包含块
 
@@ -491,7 +493,7 @@ impl<'a> LayoutBox<'a> {
       // TODO: line box怎么确定？line box只由IFC产生，那么应该都是在inline box内部？
       // 根据测试(https://codepen.io/xxf1996/pen/oNyLWLd)，同一个line box可能包含多个不同inline box的内容；因此line box确实只能存在block box内？
       BoxType::AnonymousBlock(_) => {
-        // TODO: 匿名容器布局计算
+        // 匿名容器布局计算
         println!("AnonymousBlock");
         self.calc_block_layout(containing_block, true) // TODO: 匿名block不应该再计算padding/border/margin及一些样式，不然就重复了
       },
@@ -503,7 +505,7 @@ impl<'a> LayoutBox<'a> {
   }
 }
 
-/// 生成布局树结构（实际上是构建box tree）
+/// 生成布局树结构（实际上是构建初始的`box tree`）
 fn get_layout_tree_struct<'a>(style_tree: Arc<StyledNode<'a>>) -> LayoutBox<'a> {
   let mut root = LayoutBox::new(
     match style_tree.get_display() {

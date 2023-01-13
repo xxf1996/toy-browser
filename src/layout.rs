@@ -17,7 +17,7 @@ use crate::css::{
 /// [Global variables? Do they exist? : rust](https://www.reddit.com/r/rust/comments/2v2h8l/global_variables_do_they_exist/)
 ///
 /// 在rust里，限定了全局变量的声明方式，过于动态的全局变量是unsafe的
-static mut TEXT_LAYOUTS: Vec<TextLayout> = vec![];
+static mut TEXT_LAYOUTS: Vec<TextLayout> = vec![]; // TODO: 这里静态变量的初始化可以考虑使用lazy_static；https://course.rs/advance/global-variable.html#lazy_static
 
 /// 四周边距
 #[derive(Debug, Copy, Clone)]

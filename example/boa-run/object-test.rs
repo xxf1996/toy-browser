@@ -154,6 +154,7 @@ impl DomNode {
     obj_value
   }
 
+  /// FIXME: 将js内存结构转为rust内存结构，过程中存在大量的clone操作，感觉有点浪费内存？
   fn get_rust_data(js_obj: &JsObject, context: &mut Context) -> DomNode {
     let mut rs_node = js_obj
       .downcast_ref::<DomNode>()

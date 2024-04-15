@@ -109,6 +109,7 @@ impl WindowState {
   /// 在ggez画布上绘制命令列表
   fn draw_commands(&self, ctx: &mut Context, canvas: &mut graphics::Canvas) {
     let display_list = self.display_commands.lock().unwrap();
+    println!("display list len: {}", display_list.len());
     for command in &*display_list {
       match command {
         DisplayCommand::Rectangle(color, rect) => {
@@ -151,6 +152,7 @@ impl event::EventHandler<ggez::GameError> for WindowState {
     let mut canvas = graphics::Canvas::from_frame(ctx, Color::WHITE);
     self.draw_commands(ctx, &mut canvas);
     canvas.finish(ctx)?;
+    println!("===================draw=============");
     Ok(())
   }
 }
